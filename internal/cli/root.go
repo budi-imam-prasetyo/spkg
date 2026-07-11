@@ -58,16 +58,17 @@ func runDetect(cmd *cobra.Command, args []string) error {
 	name := args[0]
 	f := parseFormat(format)
 
-	execPath, err := detector.ResolveExecPath(name)
+	rp, err := detector.ResolveExecPath(name)
 	if err != nil {
 		output.PrintNotFound(name, f)
 		return nil
 	}
 
+	// Cache by real path
 	if !noCache {
-		if cached, found := cache.Get(execPath); found {
+		if cached, found := cache.Get(rp.Real); found {
 			if verbose {
-				printVerbose(name, execPath, true)
+				printVerbose(name, rp.Real, true)
 			}
 			cached.Executable = name
 			output.PrintResult(cached, f, verbose)
@@ -76,13 +77,13 @@ func runDetect(cmd *cobra.Command, args []string) error {
 	}
 
 	if verbose {
-		printVerbose(name, execPath, false)
+		printVerbose(name, rp.Real, false)
 	}
 
-	r := detector.DetectWithRuntime(execPath, name)
+	r := detector.DetectWithRuntime(rp, name)
 
 	if !noCache {
-		cache.Set(execPath, r)
+		cache.Set(rp.Real, r)
 	}
 
 	output.PrintResult(r, f, verbose)
@@ -100,28 +101,33 @@ func newExplainCmd() *cobra.Command {
 
 func runExplain(cmd *cobra.Command, args []string) error {
 	name := args[0]
-	execPath, err := detector.ResolveExecPath(name)
+	rp, err := detector.ResolveExecPath(name)
 	if err != nil {
 		fmt.Printf("%s %s not found in PATH\n", crossMark, name)
 		return nil
 	}
 
 	f := parseFormat(format)
-	r := detector.DetectWithRuntime(execPath, name)
+	r := detector.DetectWithRuntime(rp, name)
 
-	explain := buildExplain(name, execPath, r)
+	explain := buildExplain(name, rp, r)
 	r.Explain = explain
 	output.PrintResult(r, f, verbose)
 	return nil
 }
 
-func buildExplain(name, execPath string, r *detector.Result) string {
+func buildExplain(name string, rp detector.ResolvedPath, r *detector.Result) string {
 	var b strings.Builder
-	dir := filepath.Dir(execPath)
+	dir := filepath.Dir(rp.Real)
 	home, _ := os.UserHomeDir()
 
 	b.WriteString(fmt.Sprintf("%s is located at:\n", name))
-	b.WriteString(fmt.Sprintf("  %s\n\n", execPath))
+	b.WriteString(fmt.Sprintf("  %s\n\n", rp.Real))
+
+	if rp.Original != rp.Real {
+		b.WriteString(fmt.Sprintf("Symlink: %s\n", rp.Original))
+		b.WriteString(fmt.Sprintf("Target:  %s\n\n", rp.Real))
+	}
 
 	if strings.HasPrefix(dir, home) {
 		b.WriteString("That directory is in your home folder.\n\n")
@@ -199,11 +205,11 @@ func runAll(cmd *cobra.Command, args []string) error {
 
 	var results []*detector.Result
 	for _, bin := range commonBins {
-		execPath, err := detector.ResolveExecPath(bin)
+		rp, err := detector.ResolveExecPath(bin)
 		if err != nil {
 			continue
 		}
-		r := detector.DetectWithRuntime(execPath, bin)
+		r := detector.DetectWithRuntime(rp, bin)
 		results = append(results, r)
 	}
 

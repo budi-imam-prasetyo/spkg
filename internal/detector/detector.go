@@ -105,20 +105,32 @@ type RuntimeDetector interface {
 	IsAvailable() bool
 }
 
-func ResolveExecPath(name string) (string, error) {
+type ResolvedPath struct {
+	Original string
+	Real     string
+}
+
+func (rp ResolvedPath) Both() []string {
+	if rp.Original == rp.Real {
+		return []string{rp.Real}
+	}
+	return []string{rp.Original, rp.Real}
+}
+
+func ResolveExecPath(name string) (ResolvedPath, error) {
 	path, err := exec.LookPath(name)
 	if err != nil {
-		return "", fmt.Errorf("executable %q not found in PATH", name)
+		return ResolvedPath{}, fmt.Errorf("executable %q not found in PATH", name)
 	}
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		abs = path
 	}
 	realPath, err := filepath.EvalSymlinks(abs)
-	if err == nil {
-		return realPath, nil
+	if err != nil {
+		realPath = abs
 	}
-	return abs, nil
+	return ResolvedPath{Original: abs, Real: realPath}, nil
 }
 
 func HasCommand(name string) bool {

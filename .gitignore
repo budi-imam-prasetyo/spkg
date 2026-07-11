@@ -18,3 +18,14 @@ dist/
 # OS
 .DS_Store
 Thumbs.db
+
+agent-skills/
+cmd/
+internal/
+pkg-origin/
+go.mod
+go.sum
+main.go
+Makefile
+README.md
+LICENSE

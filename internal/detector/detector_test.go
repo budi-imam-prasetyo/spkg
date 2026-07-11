@@ -5,12 +5,15 @@ import (
 )
 
 func TestResolveExecPath(t *testing.T) {
-	path, err := ResolveExecPath("ls")
+	rp, err := ResolveExecPath("ls")
 	if err != nil {
 		t.Fatalf("expected to find ls, got error: %v", err)
 	}
-	if path == "" {
-		t.Fatal("expected non-empty path")
+	if rp.Original == "" {
+		t.Fatal("expected non-empty original path")
+	}
+	if rp.Real == "" {
+		t.Fatal("expected non-empty real path")
 	}
 }
 
@@ -18,6 +21,20 @@ func TestResolveExecPath_NotFound(t *testing.T) {
 	_, err := ResolveExecPath("nonexistent_binary_xyz_123")
 	if err == nil {
 		t.Fatal("expected error for nonexistent binary")
+	}
+}
+
+func TestResolvedPath_Both(t *testing.T) {
+	rp := ResolvedPath{Original: "/usr/bin/git", Real: "/usr/bin/git"}
+	both := rp.Both()
+	if len(both) != 1 {
+		t.Errorf("expected 1 path when same, got %d", len(both))
+	}
+
+	rp2 := ResolvedPath{Original: "/bin/git", Real: "/usr/bin/git"}
+	both2 := rp2.Both()
+	if len(both2) != 2 {
+		t.Errorf("expected 2 paths when different, got %d", len(both2))
 	}
 }
 
@@ -88,7 +105,8 @@ func TestRuntimeRegistry(t *testing.T) {
 }
 
 func TestDetectFirst(t *testing.T) {
-	r := DetectFirst("/usr/bin/ls")
+	rp := ResolvedPath{Original: "/usr/bin/ls", Real: "/usr/bin/ls"}
+	r := DetectFirst(rp)
 	if r == nil {
 		t.Fatal("expected to find ls")
 	}
@@ -98,7 +116,8 @@ func TestDetectFirst(t *testing.T) {
 }
 
 func TestDetectWithRuntime(t *testing.T) {
-	r := DetectWithRuntime("/usr/bin/ls", "ls")
+	rp := ResolvedPath{Original: "/usr/bin/ls", Real: "/usr/bin/ls"}
+	r := DetectWithRuntime(rp, "ls")
 	if r == nil {
 		t.Fatal("expected to find ls")
 	}
@@ -111,7 +130,8 @@ func TestDetectWithRuntime(t *testing.T) {
 }
 
 func TestDetectRuntime(t *testing.T) {
-	rt, version, manager, confidence := DetectRuntime("/usr/bin/ls")
+	rp := ResolvedPath{Original: "/usr/bin/ls", Real: "/usr/bin/ls"}
+	rt, version, manager, confidence := DetectRuntime(rp)
 	// ls is not managed by any runtime
 	if rt != RuntimeNone {
 		t.Logf("Runtime detected: %s %s (manager: %s, confidence: %d)", rt, version, manager, confidence)
@@ -175,15 +195,100 @@ func TestRuntimeConstants(t *testing.T) {
 	}
 }
 
+func TestBuildRemoveCmd(t *testing.T) {
+	home := HomeDir()
+	tests := []struct {
+		execPath string
+		want     string
+	}{
+		{
+			execPath: home + "/.bun/install/global/node_modules/npkill/lib/index.js",
+			want:     "bun remove -g npkill",
+		},
+		{
+			execPath: home + "/.cargo/bin/rg",
+			want:     "cargo uninstall rg",
+		},
+		{
+			execPath: "/usr/bin/git",
+			want:     "sudo rm /usr/bin/git",
+		},
+	}
+
+	for _, tt := range tests {
+		got := buildRemoveCmd(tt.execPath)
+		if got != tt.want {
+			t.Errorf("buildRemoveCmd(%q) = %q, want %q", tt.execPath, got, tt.want)
+		}
+	}
+}
+
+func TestExtractBunPackageName(t *testing.T) {
+	home := HomeDir()
+	tests := []struct {
+		path string
+		want string
+	}{
+		{
+			path: home + "/.bun/install/global/node_modules/npkill/lib/index.js",
+			want: "npkill",
+		},
+		{
+			path: home + "/.bun/install/global/node_modules/@scope/pkg/lib/index.js",
+			want: "@scope/pkg",
+		},
+		{
+			path: home + "/.cargo/bin/rg",
+			want: "",
+		},
+	}
+
+	for _, tt := range tests {
+		got := extractBunPackageName(tt.path)
+		if got != tt.want {
+			t.Errorf("extractBunPackageName(%q) = %q, want %q", tt.path, got, tt.want)
+		}
+	}
+}
+
+func TestExtractNpmPackageName(t *testing.T) {
+	tests := []struct {
+		path string
+		want string
+	}{
+		{
+			path: "/home/user/.local/share/fnm/node-versions/v22.18.0/installation/lib/node_modules/npm/bin/npm-cli.js",
+			want: "npm",
+		},
+		{
+			path: "/usr/lib/node_modules/eslint/bin/eslint.js",
+			want: "eslint",
+		},
+		{
+			path: "/home/user/.cargo/bin/rg",
+			want: "",
+		},
+	}
+
+	for _, tt := range tests {
+		got := extractNpmPackageName(tt.path)
+		if got != tt.want {
+			t.Errorf("extractNpmPackageName(%q) = %q, want %q", tt.path, got, tt.want)
+		}
+	}
+}
+
 func BenchmarkDetectFirst(b *testing.B) {
+	rp := ResolvedPath{Original: "/usr/bin/ls", Real: "/usr/bin/ls"}
 	for i := 0; i < b.N; i++ {
-		DetectFirst("/usr/bin/ls")
+		DetectFirst(rp)
 	}
 }
 
 func BenchmarkDetectWithRuntime(b *testing.B) {
+	rp := ResolvedPath{Original: "/usr/bin/ls", Real: "/usr/bin/ls"}
 	for i := 0; i < b.N; i++ {
-		DetectWithRuntime("/usr/bin/ls", "ls")
+		DetectWithRuntime(rp, "ls")
 	}
 }
 

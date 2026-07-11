@@ -6,10 +6,10 @@ import (
 )
 
 var (
-	registry       []Detector
-	runtimeReg     []RuntimeDetector
-	mu             sync.RWMutex
-	runtimeMu      sync.RWMutex
+	registry   []Detector
+	runtimeReg []RuntimeDetector
+	mu         sync.RWMutex
+	runtimeMu  sync.RWMutex
 )
 
 func Register(d Detector) {
@@ -40,16 +40,19 @@ func GetAllRuntimes() []RuntimeDetector {
 	return cp
 }
 
-func DetectAll(execPath string) []*Result {
+func DetectAll(execPath ResolvedPath) []*Result {
 	detectors := GetAll()
 	var results []*Result
 	for _, d := range detectors {
 		if !d.IsAvailable() {
 			continue
 		}
-		r := d.Detect(execPath)
-		if r != nil && r.Found {
-			results = append(results, r)
+		for _, p := range execPath.Both() {
+			r := d.Detect(p)
+			if r != nil && r.Found {
+				results = append(results, r)
+				break
+			}
 		}
 	}
 	sort.Slice(results, func(i, j int) bool {
@@ -58,27 +61,30 @@ func DetectAll(execPath string) []*Result {
 	return results
 }
 
-func DetectFirst(execPath string) *Result {
+func DetectFirst(execPath ResolvedPath) *Result {
 	detectors := GetAll()
 	for _, d := range detectors {
 		if !d.IsAvailable() {
 			continue
 		}
-		r := d.Detect(execPath)
-		if r != nil && r.Found {
-			return r
+		// Try both original and real paths
+		for _, p := range execPath.Both() {
+			r := d.Detect(p)
+			if r != nil && r.Found {
+				return r
+			}
 		}
 	}
 	return nil
 }
 
-func DetectRuntime(execPath string) (RuntimeType, string, string, int) {
+func DetectRuntime(execPath ResolvedPath) (RuntimeType, string, string, int) {
 	detectors := GetAllRuntimes()
 	for _, d := range detectors {
 		if !d.IsAvailable() {
 			continue
 		}
-		rt, version, manager, confidence := d.Detect(execPath)
+		rt, version, manager, confidence := d.Detect(execPath.Real)
 		if rt != RuntimeNone && confidence > 0 {
 			return rt, version, manager, confidence
 		}
@@ -86,7 +92,7 @@ func DetectRuntime(execPath string) (RuntimeType, string, string, int) {
 	return RuntimeNone, "", "", 0
 }
 
-func DetectWithRuntime(execPath string, name string) *Result {
+func DetectWithRuntime(execPath ResolvedPath, name string) *Result {
 	r := DetectFirst(execPath)
 	if r == nil {
 		r = NewManualResult(execPath, name)
