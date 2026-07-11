@@ -321,7 +321,7 @@ func (d *SdkmanDetector) Detect(execPath string) (RuntimeType, string, string, i
 		if version == "current" && len(parts) >= 3 {
 			version = parts[2]
 		}
-		name := strings.Title(tool)
+		name := Capitalize(tool)
 		return RuntimeSdkman, name + " " + version, "SDKMAN!", 95
 	}
 	return RuntimeNone, "", "", 0
@@ -468,7 +468,7 @@ func (d *AsdfDetector) Detect(execPath string) (RuntimeType, string, string, int
 	if len(parts) >= 2 {
 		plugin := parts[0]
 		version := parts[1]
-		name := strings.Title(plugin)
+		name := Capitalize(plugin)
 		return RuntimeAsdf, name + " " + version, "asdf", 90
 	}
 	return RuntimeNone, "", "", 0
@@ -491,7 +491,7 @@ func (d *MiseDetector) Detect(execPath string) (RuntimeType, string, string, int
 	if len(parts) >= 2 {
 		plugin := parts[0]
 		version := parts[1]
-		name := strings.Title(plugin)
+		name := Capitalize(plugin)
 		return RuntimeMise, name + " " + version, "mise", 90
 	}
 	return RuntimeNone, "", "", 0

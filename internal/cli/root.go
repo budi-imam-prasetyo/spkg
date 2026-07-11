@@ -126,7 +126,7 @@ func runExplain(cmd *cobra.Command, args []string) error {
 func buildExplain(name string, rp detector.ResolvedPath, r *detector.Result) string {
 	var b strings.Builder
 	dir := filepath.Dir(rp.Real)
-	home, _ := os.UserHomeDir()
+	home := detector.HomeDir()
 
 	b.WriteString(fmt.Sprintf("%s is located at:\n", name))
 	b.WriteString(fmt.Sprintf("  %s\n\n", rp.Real))

@@ -76,9 +76,8 @@ func (d *PipDetector) Detect(execPath string) *Result {
 }
 
 func detectPipExecInSite(execPath string) bool {
-	home, _ := os.UserHomeDir()
 	sites := []string{
-		filepath.Join(home, ".local", "lib"),
+		filepath.Join(HomeDir(), ".local", "lib"),
 		"/usr/lib",
 		"/usr/local/lib",
 	}

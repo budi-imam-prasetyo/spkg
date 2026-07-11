@@ -159,6 +159,13 @@ func HomeDir() string {
 	return home
 }
 
+func Capitalize(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
+}
+
 func PathHasPrefix(path, prefix string) bool {
 	return strings.HasPrefix(path, prefix)
 }
