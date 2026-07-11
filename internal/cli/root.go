@@ -29,7 +29,10 @@ func NewRootCmd() *cobra.Command {
 		Long: `pkg-origin detects which package manager installed a given executable.
 It supports pacman, paru, yay, bun, npm, pnpm, yarn, pip, pipx, uv,
 cargo, go, gem, composer, flatpak, snap, homebrew, nix, docker, podman,
-and more.`,
+and more.
+
+It also detects runtime/version managers: fnm, nvm, volta, asdf, mise,
+pyenv, conda, rbenv, RVM, SDKMAN!, rustup, and others.`,
 		Args: cobra.ArbitraryArgs,
 		RunE: runDetect,
 	}
@@ -55,19 +58,18 @@ func runDetect(cmd *cobra.Command, args []string) error {
 	name := args[0]
 	f := parseFormat(format)
 
-	// Resolve exec path first
 	execPath, err := detector.ResolveExecPath(name)
 	if err != nil {
 		output.PrintNotFound(name, f)
 		return nil
 	}
 
-	// Check cache
 	if !noCache {
 		if cached, found := cache.Get(execPath); found {
 			if verbose {
 				printVerbose(name, execPath, true)
 			}
+			cached.Executable = name
 			output.PrintResult(cached, f, verbose)
 			return nil
 		}
@@ -77,12 +79,7 @@ func runDetect(cmd *cobra.Command, args []string) error {
 		printVerbose(name, execPath, false)
 	}
 
-	r := detector.DetectFirst(execPath)
-	if r == nil {
-		r = detector.NewManualResult(execPath, name)
-	}
-
-	r.Executable = name
+	r := detector.DetectWithRuntime(execPath, name)
 
 	if !noCache {
 		cache.Set(execPath, r)
@@ -110,10 +107,7 @@ func runExplain(cmd *cobra.Command, args []string) error {
 	}
 
 	f := parseFormat(format)
-	r := detector.DetectFirst(execPath)
-	if r == nil {
-		r = detector.NewManualResult(execPath, name)
-	}
+	r := detector.DetectWithRuntime(execPath, name)
 
 	explain := buildExplain(name, execPath, r)
 	r.Explain = explain
@@ -130,11 +124,24 @@ func buildExplain(name, execPath string, r *detector.Result) string {
 	b.WriteString(fmt.Sprintf("  %s\n\n", execPath))
 
 	if strings.HasPrefix(dir, home) {
-		b.WriteString(fmt.Sprintf("That directory is in your home folder.\n"))
+		b.WriteString("That directory is in your home folder.\n\n")
 	} else if strings.HasPrefix(dir, "/usr") {
-		b.WriteString(fmt.Sprintf("That directory is owned by the system.\n"))
+		b.WriteString("That directory is owned by the system.\n\n")
 	}
 
+	// Runtime explanation
+	if r.Runtime != "" {
+		b.WriteString(fmt.Sprintf("Runtime: %s\n", r.Runtime))
+		if r.RuntimeVersion != "" {
+			b.WriteString(fmt.Sprintf("Runtime version: %s\n", r.RuntimeVersion))
+		}
+		if r.RuntimeManager != "" {
+			b.WriteString(fmt.Sprintf("Runtime manager: %s\n", r.RuntimeManager))
+		}
+		b.WriteString("\n")
+	}
+
+	// Package manager explanation
 	switch r.Manager {
 	case detector.ManagerBun:
 		b.WriteString("Bun manages global packages in ~/.bun/bin.\n")
@@ -146,7 +153,9 @@ func buildExplain(name, execPath string, r *detector.Result) string {
 		b.WriteString("pacman installed this as a system package.\n")
 	case detector.ManagerPipx:
 		b.WriteString("pipx manages Python CLI tools in isolated virtual environments.\n")
-		b.WriteString(fmt.Sprintf("Virtual env: %s\n", r.VirtualEnv))
+		if r.VirtualEnv != "" {
+			b.WriteString(fmt.Sprintf("Virtual env: %s\n", r.VirtualEnv))
+		}
 	case detector.ManagerCargo:
 		b.WriteString("cargo installed this from crates.io to ~/.cargo/bin.\n")
 	case detector.ManagerGo:
@@ -194,10 +203,7 @@ func runAll(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			continue
 		}
-		r := detector.DetectFirst(execPath)
-		if r == nil {
-			r = detector.NewManualResult(execPath, bin)
-		}
+		r := detector.DetectWithRuntime(execPath, bin)
 		results = append(results, r)
 	}
 
@@ -243,7 +249,7 @@ func newVersionCmd() *cobra.Command {
 		Use:   "version",
 		Short: "Print version information",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println("pkg-origin v1.0.0")
+			fmt.Println("pkg-origin v1.1.0")
 		},
 	}
 }
@@ -271,6 +277,7 @@ func printVerbose(name, execPath string, fromCache bool) {
 	if fromCache {
 		fmt.Fprintf(os.Stderr, "Result loaded from cache.\n")
 	} else {
-		fmt.Fprintf(os.Stderr, "Running detectors...\n")
+		fmt.Fprintf(os.Stderr, "Running package manager detectors...\n")
+		fmt.Fprintf(os.Stderr, "Running runtime/version manager detectors...\n")
 	}
 }

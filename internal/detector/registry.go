@@ -6,8 +6,10 @@ import (
 )
 
 var (
-	registry []Detector
-	mu       sync.RWMutex
+	registry       []Detector
+	runtimeReg     []RuntimeDetector
+	mu             sync.RWMutex
+	runtimeMu      sync.RWMutex
 )
 
 func Register(d Detector) {
@@ -16,11 +18,25 @@ func Register(d Detector) {
 	registry = append(registry, d)
 }
 
+func RegisterRuntime(r RuntimeDetector) {
+	runtimeMu.Lock()
+	defer runtimeMu.Unlock()
+	runtimeReg = append(runtimeReg, r)
+}
+
 func GetAll() []Detector {
 	mu.RLock()
 	defer mu.RUnlock()
 	cp := make([]Detector, len(registry))
 	copy(cp, registry)
+	return cp
+}
+
+func GetAllRuntimes() []RuntimeDetector {
+	runtimeMu.RLock()
+	defer runtimeMu.RUnlock()
+	cp := make([]RuntimeDetector, len(runtimeReg))
+	copy(cp, runtimeReg)
 	return cp
 }
 
@@ -54,6 +70,41 @@ func DetectFirst(execPath string) *Result {
 		}
 	}
 	return nil
+}
+
+func DetectRuntime(execPath string) (RuntimeType, string, string, int) {
+	detectors := GetAllRuntimes()
+	for _, d := range detectors {
+		if !d.IsAvailable() {
+			continue
+		}
+		rt, version, manager, confidence := d.Detect(execPath)
+		if rt != RuntimeNone && confidence > 0 {
+			return rt, version, manager, confidence
+		}
+	}
+	return RuntimeNone, "", "", 0
+}
+
+func DetectWithRuntime(execPath string, name string) *Result {
+	r := DetectFirst(execPath)
+	if r == nil {
+		r = NewManualResult(execPath, name)
+	}
+
+	rt, version, manager, confidence := DetectRuntime(execPath)
+	if rt != RuntimeNone {
+		r.Runtime = rt
+		r.RuntimeVersion = version
+		r.RuntimeManager = manager
+		if confidence > r.Confidence {
+			r.Confidence = confidence
+		}
+	} else if r.Confidence == 0 {
+		r.Confidence = 50
+	}
+
+	return r
 }
 
 func priorityOrder(m Manager) int {

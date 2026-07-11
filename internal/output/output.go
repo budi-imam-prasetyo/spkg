@@ -13,11 +13,12 @@ import (
 )
 
 var (
-	checkMark = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true).Render("✓")
-	crossMark = lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Bold(true).Render("✗")
+	checkMark  = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true).Render("✓")
+	crossMark  = lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Bold(true).Render("✗")
 	labelStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Bold(true)
 	valueStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("15"))
 	titleStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("12")).Bold(true)
+	runtimeLabel = lipgloss.NewStyle().Foreground(lipgloss.Color("13")).Bold(true)
 )
 
 type Format string
@@ -92,10 +93,29 @@ func printPretty(r *detector.Result) {
 	}
 
 	fmt.Printf("%s Package ditemukan\n\n", checkMark)
+
+	// Executable
 	fmt.Println(labelStyle.Render("Executable:"))
 	fmt.Printf("  %s\n\n", r.ExecutablePath)
+
+	// Package Manager
 	fmt.Println(labelStyle.Render("Package manager:"))
 	fmt.Printf("  %s\n\n", string(r.Manager))
+
+	// Runtime (if detected)
+	if r.Runtime != "" {
+		fmt.Println(runtimeLabel.Render("Runtime:"))
+		fmt.Printf("  %s\n", string(r.Runtime))
+		if r.RuntimeVersion != "" {
+			fmt.Printf("  Runtime version: %s\n", r.RuntimeVersion)
+		}
+		if r.RuntimeManager != "" {
+			fmt.Printf("  Runtime manager: %s\n", r.RuntimeManager)
+		}
+		fmt.Println()
+	}
+
+	// Package details
 	if r.Package != "" {
 		fmt.Println(labelStyle.Render("Package:"))
 		fmt.Printf("  %s\n\n", r.Package)
@@ -128,12 +148,21 @@ func printPretty(r *detector.Result) {
 		fmt.Println(labelStyle.Render("Remote:"))
 		fmt.Printf("  %s\n\n", r.Remote)
 	}
+
+	// Confidence
+	if r.Confidence > 0 {
+		fmt.Println(labelStyle.Render("Confidence:"))
+		fmt.Printf("  %d%%\n\n", r.Confidence)
+	}
+
+	// Commands
 	fmt.Println(labelStyle.Render("Install command:"))
 	fmt.Printf("  %s\n\n", r.InstallCmd)
 	fmt.Println(labelStyle.Render("Upgrade command:"))
 	fmt.Printf("  %s\n\n", r.UpgradeCmd)
 	fmt.Println(labelStyle.Render("Remove command:"))
 	fmt.Printf("  %s\n", r.RemoveCmd)
+
 	if r.Explain != "" {
 		fmt.Println()
 		fmt.Println(labelStyle.Render("Explanation:"))
@@ -153,6 +182,15 @@ func printTableResult(r *detector.Result) {
 	fmt.Fprintf(w, "\n")
 	fmt.Fprintf(w, "%s\t%s\n", labelStyle.Render("Executable:"), r.ExecutablePath)
 	fmt.Fprintf(w, "%s\t%s\n", labelStyle.Render("Package manager:"), string(r.Manager))
+	if r.Runtime != "" {
+		fmt.Fprintf(w, "%s\t%s\n", runtimeLabel.Render("Runtime:"), string(r.Runtime))
+		if r.RuntimeVersion != "" {
+			fmt.Fprintf(w, "%s\t%s\n", runtimeLabel.Render("Runtime version:"), r.RuntimeVersion)
+		}
+		if r.RuntimeManager != "" {
+			fmt.Fprintf(w, "%s\t%s\n", runtimeLabel.Render("Runtime manager:"), r.RuntimeManager)
+		}
+	}
 	if r.Package != "" {
 		fmt.Fprintf(w, "%s\t%s\n", labelStyle.Render("Package:"), r.Package)
 	}
@@ -177,6 +215,9 @@ func printTableResult(r *detector.Result) {
 	if r.Remote != "" {
 		fmt.Fprintf(w, "%s\t%s\n", labelStyle.Render("Remote:"), r.Remote)
 	}
+	if r.Confidence > 0 {
+		fmt.Fprintf(w, "%s\t%d%%\n", labelStyle.Render("Confidence:"), r.Confidence)
+	}
 	fmt.Fprintf(w, "\n")
 	fmt.Fprintf(w, "%s\t%s\n", labelStyle.Render("Install:"), r.InstallCmd)
 	fmt.Fprintf(w, "%s\t%s\n", labelStyle.Render("Upgrade:"), r.UpgradeCmd)
@@ -191,6 +232,15 @@ func printPlainResult(r *detector.Result) {
 	}
 	fmt.Printf("executable: %s\n", r.ExecutablePath)
 	fmt.Printf("manager: %s\n", string(r.Manager))
+	if r.Runtime != "" {
+		fmt.Printf("runtime: %s\n", string(r.Runtime))
+		if r.RuntimeVersion != "" {
+			fmt.Printf("runtime_version: %s\n", r.RuntimeVersion)
+		}
+		if r.RuntimeManager != "" {
+			fmt.Printf("runtime_manager: %s\n", r.RuntimeManager)
+		}
+	}
 	if r.Package != "" {
 		fmt.Printf("package: %s\n", r.Package)
 	}
@@ -199,6 +249,9 @@ func printPlainResult(r *detector.Result) {
 	}
 	if r.Repository != "" {
 		fmt.Printf("repository: %s\n", r.Repository)
+	}
+	if r.Confidence > 0 {
+		fmt.Printf("confidence: %d%%\n", r.Confidence)
 	}
 }
 
@@ -214,40 +267,54 @@ func printYAML(r *data) {
 
 func printTable(results []*detector.Result) {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintf(w, "%s\t%s\n", titleStyle.Render("Executable"), titleStyle.Render("Manager"))
-	fmt.Fprintf(w, "%s\t%s\n", "────────────", "──────────────")
+	fmt.Fprintf(w, "%s\t%s\t%s\n", titleStyle.Render("Executable"), titleStyle.Render("Manager"), titleStyle.Render("Runtime"))
+	fmt.Fprintf(w, "%s\t%s\t%s\n", "────────────", "──────────────", "──────────────")
 	for _, r := range results {
 		name := r.ExecutablePath
 		if idx := strings.LastIndex(name, "/"); idx != -1 {
 			name = name[idx+1:]
 		}
-		fmt.Fprintf(w, "%s\t%s\n", name, string(r.Manager))
+		rt := string(r.Runtime)
+		if rt == "" {
+			rt = "-"
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\n", name, string(r.Manager), rt)
 	}
 	w.Flush()
 }
 
 func printPlainTable(results []*detector.Result) {
-	fmt.Printf("%-20s %s\n", "Executable", "Manager")
-	fmt.Printf("%-20s %s\n", strings.Repeat("─", 20), strings.Repeat("─", 14))
+	fmt.Printf("%-20s %-15s %s\n", "Executable", "Manager", "Runtime")
+	fmt.Printf("%-20s %-15s %s\n", strings.Repeat("─", 20), strings.Repeat("─", 15), strings.Repeat("─", 15))
 	for _, r := range results {
 		name := r.ExecutablePath
 		if idx := strings.LastIndex(name, "/"); idx != -1 {
 			name = name[idx+1:]
 		}
-		fmt.Printf("%-20s %s\n", name, string(r.Manager))
+		rt := string(r.Runtime)
+		if rt == "" {
+			rt = "-"
+		}
+		fmt.Printf("%-20s %-15s %s\n", name, string(r.Manager), rt)
 	}
 }
 
 func printJSONList(results []*detector.Result) {
 	type item struct {
-		Executable string `json:"executable"`
-		Manager    string `json:"manager"`
+		Executable     string `json:"executable"`
+		Manager        string `json:"manager"`
+		Runtime        string `json:"runtime,omitempty"`
+		RuntimeVersion string `json:"runtime_version,omitempty"`
+		Package        string `json:"package,omitempty"`
 	}
 	var items []item
 	for _, r := range results {
 		items = append(items, item{
-			Executable: r.ExecutablePath,
-			Manager:    string(r.Manager),
+			Executable:     r.ExecutablePath,
+			Manager:        string(r.Manager),
+			Runtime:        string(r.Runtime),
+			RuntimeVersion: r.RuntimeVersion,
+			Package:        r.Package,
 		})
 	}
 	out, _ := json.MarshalIndent(items, "", "  ")
@@ -256,14 +323,20 @@ func printJSONList(results []*detector.Result) {
 
 func printYAMLList(results []*detector.Result) {
 	type item struct {
-		Executable string `yaml:"executable"`
-		Manager    string `yaml:"manager"`
+		Executable     string `yaml:"executable"`
+		Manager        string `yaml:"manager"`
+		Runtime        string `yaml:"runtime,omitempty"`
+		RuntimeVersion string `yaml:"runtime_version,omitempty"`
+		Package        string `yaml:"package,omitempty"`
 	}
 	var items []item
 	for _, r := range results {
 		items = append(items, item{
-			Executable: r.ExecutablePath,
-			Manager:    string(r.Manager),
+			Executable:     r.ExecutablePath,
+			Manager:        string(r.Manager),
+			Runtime:        string(r.Runtime),
+			RuntimeVersion: r.RuntimeVersion,
+			Package:        r.Package,
 		})
 	}
 	out, _ := yaml.Marshal(items)
