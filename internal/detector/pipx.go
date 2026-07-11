@@ -17,8 +17,8 @@ func (d *PipxDetector) IsAvailable() bool {
 }
 
 func (d *PipxDetector) Detect(execPath string) *Result {
-	home, _ := os.UserHomeDir()
-	localBin := filepath.Join(home, ".local", "bin")
+	home := HomeDir()
+	localBin := filepath.Join(home, ".local", "bin") + string(filepath.Separator)
 	if !strings.HasPrefix(execPath, localBin) {
 		return nil
 	}

@@ -1,4 +1,4 @@
-# pkg-origin
+# spkg
 
 Detect which package manager installed an executable on your system.
 
@@ -24,16 +24,16 @@ Download from [GitHub Releases](https://github.com/ryoukaii/spkg/releases).
 ```bash
 git clone https://github.com/ryoukaii/spkg.git
 cd spkg
-go build -o pkg-origin .
-sudo cp pkg-origin /usr/local/bin/
+go build -o spkg .
+sudo cp spkg /usr/local/bin/
 ```
 
 ### AUR (Arch Linux)
 
 ```bash
-paru -S pkg-origin
+paru -S spkg
 # or
-yay -S pkg-origin
+yay -S spkg
 ```
 
 ## Usage
@@ -41,7 +41,7 @@ yay -S pkg-origin
 ### Basic detection
 
 ```bash
-pkg-origin git
+spkg git
 ```
 
 Output:
@@ -76,16 +76,16 @@ Remove command:
 ### Output formats
 
 ```bash
-pkg-origin git --output json
-pkg-origin git --output yaml
-pkg-origin git --output table
-pkg-origin git --output plain
+spkg git --output json
+spkg git --output yaml
+spkg git --output table
+spkg git --output plain
 ```
 
 ### Verbose mode
 
 ```bash
-pkg-origin git -v
+spkg git -v
 ```
 
 Shows the detection process:
@@ -100,7 +100,7 @@ Running detectors...
 ### Explain mode
 
 ```bash
-pkg-origin explain git
+spkg explain git
 ```
 
 Explains why an executable is in your PATH:
@@ -127,7 +127,7 @@ Explanation:
 ### List all detectable executables
 
 ```bash
-pkg-origin all
+spkg all
 ```
 
 Output:
@@ -145,8 +145,8 @@ lazygit       pacman
 ### Cache management
 
 ```bash
-pkg-origin cache stats    # Show cache statistics
-pkg-origin cache clear    # Clear cache
+spkg cache stats    # Show cache statistics
+spkg cache clear    # Clear cache
 ```
 
 ## Adding a new detector
@@ -245,7 +245,7 @@ First run may be slow due to package manager queries. Subsequent runs use cache 
 
 Clear cache with:
 ```bash
-pkg-origin cache clear
+spkg cache clear
 ```
 
 ## License

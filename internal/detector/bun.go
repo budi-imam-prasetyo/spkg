@@ -17,11 +17,27 @@ func (d *BunDetector) IsAvailable() bool {
 }
 
 func (d *BunDetector) Detect(execPath string) *Result {
-	home, _ := os.UserHomeDir()
-	bunBin := filepath.Join(home, ".bun", "bin")
+	home := HomeDir()
+	bunBin := filepath.Join(home, ".bun", "bin") + string(filepath.Separator)
 
 	if !strings.HasPrefix(execPath, bunBin) {
 		return nil
+	}
+
+	base := filepath.Base(execPath)
+
+	// If detecting bun itself, show how to install/remove bun
+	if base == "bun" {
+		return &Result{
+			Found:          true,
+			ExecutablePath: execPath,
+			Manager:        ManagerBun,
+			Package:        "bun",
+			Global:         BoolPtr(true),
+			InstallCmd:     "curl -fsSL https://bun.sh/install | bash",
+			UpgradeCmd:     "bun upgrade",
+			RemoveCmd:      "rm -rf ~/.bun",
+		}
 	}
 
 	globalDir := filepath.Join(home, ".bun", "install", "global", "node_modules")
@@ -31,17 +47,17 @@ func (d *BunDetector) Detect(execPath string) *Result {
 			Found:          true,
 			ExecutablePath: execPath,
 			Manager:        ManagerBun,
-			Package:        filepath.Base(execPath),
+			Package:        base,
 			Global:         BoolPtr(true),
-			InstallCmd:     "bun add -g " + filepath.Base(execPath),
-			UpgradeCmd:     "bun update -g " + filepath.Base(execPath),
-			RemoveCmd:      "bun remove -g " + filepath.Base(execPath),
+			InstallCmd:     "bun add -g " + base,
+			UpgradeCmd:     "bun update -g " + base,
+			RemoveCmd:      "bun remove -g " + base,
 		}
 	}
 
 	pkgName := detectGlobalPkgFromDir(globalDir, execPath)
 	if pkgName == "" {
-		pkgName = filepath.Base(execPath)
+		pkgName = base
 	}
 
 	return &Result{

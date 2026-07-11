@@ -1,7 +1,6 @@
 package detector
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 )
@@ -17,8 +16,8 @@ func (d *UvDetector) IsAvailable() bool {
 }
 
 func (d *UvDetector) Detect(execPath string) *Result {
-	home, _ := os.UserHomeDir()
-	uvBin := filepath.Join(home, ".local", "bin")
+	home := HomeDir()
+	uvBin := filepath.Join(home, ".local", "bin") + string(filepath.Separator)
 	if !strings.HasPrefix(execPath, uvBin) {
 		return nil
 	}

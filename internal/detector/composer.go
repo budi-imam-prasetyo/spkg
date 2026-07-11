@@ -1,7 +1,6 @@
 package detector
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 )
@@ -19,16 +18,29 @@ func (d *ComposerDetector) IsAvailable() bool {
 func (d *ComposerDetector) Detect(execPath string) *Result {
 	globalDir, _ := RunCmd("composer", "global", "config", "home")
 	if globalDir == "" {
-		home, _ := os.UserHomeDir()
-		globalDir = filepath.Join(home, ".composer")
+		globalDir = filepath.Join(HomeDir(), ".composer")
 	}
 
-	binDir := filepath.Join(globalDir, "vendor", "bin")
+	binDir := filepath.Join(globalDir, "vendor", "bin") + string(filepath.Separator)
 	if !strings.HasPrefix(execPath, binDir) {
 		return nil
 	}
 
 	base := filepath.Base(execPath)
+
+	// If detecting composer itself, show how to install/remove Composer
+	if base == "composer" {
+		return &Result{
+			Found:          true,
+			ExecutablePath: execPath,
+			Manager:        ManagerComposer,
+			Package:        "composer",
+			InstallCmd:     "sudo pacman -S composer  # or: curl -sS https://getcomposer.org/installer | php",
+			UpgradeCmd:     "sudo pacman -Syu composer  # or: composer self-update",
+			RemoveCmd:      "sudo pacman -Rns composer  # or: rm /usr/local/bin/composer",
+		}
+	}
+
 	return &Result{
 		Found:          true,
 		ExecutablePath: execPath,

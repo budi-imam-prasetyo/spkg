@@ -24,9 +24,9 @@ func NewRootCmd() *cobra.Command {
 	cache.Init(10*time.Minute, 30*time.Minute)
 
 	root := &cobra.Command{
-		Use:   "pkg-origin [command]",
+		Use:   "spkg [command]",
 		Short: "Detect which package manager installed an executable",
-		Long: `pkg-origin detects which package manager installed a given executable.
+		Long: `spkg detects which package manager installed a given executable.
 It supports pacman, paru, yay, bun, npm, pnpm, yarn, pip, pipx, uv,
 cargo, go, gem, composer, flatpak, snap, homebrew, nix, docker, podman,
 and more.
@@ -34,13 +34,18 @@ and more.
 It also detects runtime/version managers: fnm, nvm, volta, asdf, mise,
 pyenv, conda, rbenv, RVM, SDKMAN!, rustup, and others.`,
 		Args: cobra.ArbitraryArgs,
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			if cacheTTLSec > 0 {
+				cache.SetTTL(time.Duration(cacheTTLSec) * time.Second)
+			}
+		},
 		RunE: runDetect,
 	}
 
 	root.PersistentFlags().StringVarP(&format, "output", "o", "pretty", "Output format: pretty, json, yaml, table, plain")
 	root.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Show verbose detection output")
 	root.PersistentFlags().BoolVar(&noCache, "no-cache", false, "Skip cache")
-	root.PersistentFlags().IntVar(&cacheTTLSec, "cache-ttl", 600, "Cache TTL in seconds")
+	root.PersistentFlags().IntVar(&cacheTTLSec, "cache-ttl", 600, "Cache TTL in seconds (default: 600)")
 
 	root.AddCommand(newCacheCmd())
 	root.AddCommand(newExplainCmd())
@@ -70,8 +75,10 @@ func runDetect(cmd *cobra.Command, args []string) error {
 			if verbose {
 				printVerbose(name, rp.Real, true)
 			}
-			cached.Executable = name
-			output.PrintResult(cached, f, verbose)
+			// Copy to avoid mutating cached object
+			copy := *cached
+			copy.Executable = name
+			output.PrintResult(&copy, f, verbose)
 			return nil
 		}
 	}
@@ -255,7 +262,7 @@ func newVersionCmd() *cobra.Command {
 		Use:   "version",
 		Short: "Print version information",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println("pkg-origin v1.1.0")
+			fmt.Println("spkg v1.1.0")
 		},
 	}
 }

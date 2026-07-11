@@ -1,7 +1,6 @@
 package detector
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 )
@@ -17,10 +16,26 @@ func (d *CargoDetector) IsAvailable() bool {
 }
 
 func (d *CargoDetector) Detect(execPath string) *Result {
-	home, _ := os.UserHomeDir()
-	cargoBin := filepath.Join(home, ".cargo", "bin")
+	home := HomeDir()
+	cargoBin := filepath.Join(home, ".cargo", "bin") + string(filepath.Separator)
 	if !strings.HasPrefix(execPath, cargoBin) {
 		return nil
+	}
+
+	base := filepath.Base(execPath)
+
+	// If detecting cargo/rustc itself, show how to install/remove Rust
+	if base == "cargo" || base == "rustc" || base == "rustup" {
+		return &Result{
+			Found:          true,
+			ExecutablePath: execPath,
+			Manager:        ManagerCargo,
+			Package:        "rustup",
+			Version:        detectRustVersion(),
+			InstallCmd:     "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh",
+			UpgradeCmd:     "rustup update",
+			RemoveCmd:      "rustup self uninstall  # then: rm -rf ~/.cargo ~/.rustup",
+		}
 	}
 
 	list, err := RunCmd("cargo", "install", "--list")
@@ -28,7 +43,6 @@ func (d *CargoDetector) Detect(execPath string) *Result {
 		return nil
 	}
 
-	base := filepath.Base(execPath)
 	lines := strings.Split(list, "\n")
 	for i, line := range lines {
 		line = strings.TrimSpace(line)
@@ -69,4 +83,9 @@ func (d *CargoDetector) Detect(execPath string) *Result {
 		UpgradeCmd:     "cargo install " + base,
 		RemoveCmd:      "cargo uninstall " + base,
 	}
+}
+
+func detectRustVersion() string {
+	out, _ := RunCmd("rustc", "--version")
+	return out
 }

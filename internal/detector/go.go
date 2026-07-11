@@ -1,7 +1,6 @@
 package detector
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 )
@@ -19,16 +18,29 @@ func (d *GoDetector) IsAvailable() bool {
 func (d *GoDetector) Detect(execPath string) *Result {
 	gopath, _ := RunCmd("go", "env", "GOPATH")
 	if gopath == "" {
-		home, _ := os.UserHomeDir()
-		gopath = filepath.Join(home, "go")
+		gopath = filepath.Join(HomeDir(), "go")
 	}
 
-	binDir := filepath.Join(gopath, "bin")
+	binDir := filepath.Join(gopath, "bin") + string(filepath.Separator)
 	if !strings.HasPrefix(execPath, binDir) {
 		return nil
 	}
 
 	base := filepath.Base(execPath)
+
+	// If detecting go itself, show how to install/remove Go
+	if base == "go" || base == "gofmt" {
+		return &Result{
+			Found:          true,
+			ExecutablePath: execPath,
+			Manager:        ManagerGo,
+			Package:        "go",
+			InstallCmd:     "sudo pacman -S go  # or: sudo snap install go --classic",
+			UpgradeCmd:     "sudo pacman -Syu go",
+			RemoveCmd:      "sudo pacman -Rns go  # or: sudo snap remove go",
+		}
+	}
+
 	return &Result{
 		Found:          true,
 		ExecutablePath: execPath,

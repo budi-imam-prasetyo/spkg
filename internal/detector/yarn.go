@@ -17,15 +17,30 @@ func (d *YarnDetector) IsAvailable() bool {
 
 func (d *YarnDetector) Detect(execPath string) *Result {
 	globalDir, _ := RunCmd("yarn", "global", "dir")
-	if globalDir == "" || strings.Contains(globalDir, "Error") {
+	if globalDir == "" || strings.Contains(strings.ToLower(globalDir), "error") {
 		return nil
 	}
-	binDir := filepath.Join(globalDir, "node_modules", ".bin")
+	binDir := filepath.Join(globalDir, "node_modules", ".bin") + string(filepath.Separator)
 	if !strings.HasPrefix(execPath, binDir) {
 		return nil
 	}
 
 	base := filepath.Base(execPath)
+
+	// If detecting yarn itself, show how to install/remove Yarn
+	if base == "yarn" {
+		return &Result{
+			Found:          true,
+			ExecutablePath: execPath,
+			Manager:        ManagerYarn,
+			Package:        "yarn",
+			Global:         BoolPtr(true),
+			InstallCmd:     "npm install -g yarn  # or: corepack enable",
+			UpgradeCmd:     "npm update -g yarn  # or: corepack prepare yarn@stable --activate",
+			RemoveCmd:      "npm uninstall -g yarn",
+		}
+	}
+
 	list, _ := RunCmd("yarn", "global", "list", "--depth=0")
 	pkgName := extractYarnPkgName(list, base)
 	if pkgName == "" {

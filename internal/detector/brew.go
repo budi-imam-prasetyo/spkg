@@ -1,7 +1,6 @@
 package detector
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 )
@@ -21,7 +20,7 @@ func (d *BrewDetector) Detect(execPath string) *Result {
 	if prefix == "" {
 		return nil
 	}
-	binDir := filepath.Join(prefix, "bin")
+	binDir := filepath.Join(prefix, "bin") + string(filepath.Separator)
 	if !strings.HasPrefix(execPath, binDir) {
 		return nil
 	}
@@ -29,24 +28,18 @@ func (d *BrewDetector) Detect(execPath string) *Result {
 	base := filepath.Base(execPath)
 	info, err := RunCmd("brew", "info", "--json=v2", base)
 	if err != nil {
-		return nil
-	}
-
-	version := ""
-	_ = info
-	if idx := strings.Index(info, "\"stable\""); idx != -0 {
-		verIdx := strings.Index(info[idx:], "\"version\"")
-		if verIdx != -1 {
-			sub := info[idx+verIdx:]
-			lines := strings.SplitN(sub, "\n", 3)
-			if len(lines) > 0 {
-				parts := strings.SplitN(lines[0], ":", 2)
-				if len(parts) > 1 {
-					version = strings.Trim(parts[1], " \",")
-				}
-			}
+		return &Result{
+			Found:          true,
+			ExecutablePath: execPath,
+			Manager:        ManagerBrew,
+			Package:        base,
+			InstallCmd:     "brew install " + base,
+			UpgradeCmd:     "brew upgrade " + base,
+			RemoveCmd:      "brew uninstall " + base,
 		}
 	}
+
+	version := extractBrewVersion(info)
 
 	return &Result{
 		Found:          true,
@@ -60,19 +53,23 @@ func (d *BrewDetector) Detect(execPath string) *Result {
 	}
 }
 
-func detectBrewExec(execPath string) bool {
-	prefix, _ := RunCmd("brew", "--prefix")
-	if prefix == "" {
-		return false
+func extractBrewVersion(info string) string {
+	idx := strings.Index(info, "\"stable\"")
+	if idx == -1 {
+		return ""
 	}
-	return strings.HasPrefix(execPath, filepath.Join(prefix, "bin"))
-}
-
-func isBrewAvailable() bool {
-	home, _ := os.UserHomeDir()
-	linuxbrew := filepath.Join(home, ".linuxbrew", "bin", "brew")
-	if _, err := os.Stat(linuxbrew); err == nil {
-		return true
+	verIdx := strings.Index(info[idx:], "\"version\"")
+	if verIdx == -1 {
+		return ""
 	}
-	return HasCommand("brew")
+	sub := info[idx+verIdx:]
+	lines := strings.SplitN(sub, "\n", 3)
+	if len(lines) == 0 {
+		return ""
+	}
+	parts := strings.SplitN(lines[0], ":", 2)
+	if len(parts) < 2 {
+		return ""
+	}
+	return strings.Trim(parts[1], " \",")
 }

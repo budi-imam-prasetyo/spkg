@@ -29,31 +29,39 @@ func (d *AppImageDetector) Detect(execPath string) *Result {
 		}
 	}
 
-	home, _ := os.UserHomeDir()
+	home := HomeDir()
 	appImageDirs := []string{
 		filepath.Join(home, "Applications"),
 		"/opt",
 		"/usr/local/bin",
-		"/var/lib/flatpak",
-		"/var/lib/snapd",
 	}
+	base := filepath.Base(execPath)
 	for _, dir := range appImageDirs {
 		if _, err := os.Stat(dir); err != nil {
 			continue
 		}
-		matches, _ := filepath.Glob(filepath.Join(dir, "**", "*.desktop"))
-		for _, m := range matches {
-			content, _ := os.ReadFile(m)
-			if strings.Contains(string(content), filepath.Base(execPath)) {
-				return &Result{
-					Found:          true,
-					ExecutablePath: execPath,
-					Manager:        ManagerAppImage,
-					Package:        filepath.Base(execPath),
-					InstallCmd:     "# Download .AppImage file",
-					UpgradeCmd:     "# Download latest .AppImage file",
-					RemoveCmd:      "rm " + execPath,
+		found := false
+		_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+			if found || err != nil || info.IsDir() {
+				return nil
+			}
+			if strings.HasSuffix(path, ".desktop") {
+				content, _ := os.ReadFile(path)
+				if strings.Contains(string(content), base) {
+					found = true
 				}
+			}
+			return nil
+		})
+		if found {
+			return &Result{
+				Found:          true,
+				ExecutablePath: execPath,
+				Manager:        ManagerAppImage,
+				Package:        base,
+				InstallCmd:     "# Download .AppImage file",
+				UpgradeCmd:     "# Download latest .AppImage file",
+				RemoveCmd:      "rm " + execPath,
 			}
 		}
 	}

@@ -20,17 +20,36 @@ func (d *NpmDetector) Detect(execPath string) *Result {
 	if prefix == "" {
 		return nil
 	}
-	binDir := filepath.Join(prefix, "bin")
+	binDir := filepath.Join(prefix, "bin") + string(filepath.Separator)
+	libModules := filepath.Join(prefix, "lib", "node_modules") + string(filepath.Separator)
 
-	if !strings.HasPrefix(execPath, binDir) && execPath != filepath.Join(prefix, "bin", filepath.Base(execPath)) {
-		altBin := filepath.Join(prefix, "node_modules", ".bin")
+	// Check if path is in npm's bin dir or lib/node_modules
+	inBin := strings.HasPrefix(execPath, binDir)
+	inLib := strings.HasPrefix(execPath, libModules)
+	if !inBin && !inLib {
+		altBin := filepath.Join(prefix, "node_modules", ".bin") + string(filepath.Separator)
 		if !strings.HasPrefix(execPath, altBin) {
 			return nil
 		}
 	}
 
-	globalList, _ := RunCmd("npm", "list", "-g", "--depth=0", "--json")
 	base := filepath.Base(execPath)
+
+	// If detecting npm itself, show how to install/remove npm
+	if base == "npm" || base == "npx" || base == "npm-cli.js" {
+		return &Result{
+			Found:          true,
+			ExecutablePath: execPath,
+			Manager:        ManagerNpm,
+			Package:        "npm",
+			Global:         BoolPtr(true),
+			InstallCmd:     "sudo pacman -S npm  # or: curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo bash - && sudo apt install -y nodejs",
+			UpgradeCmd:     "sudo pacman -Syu npm",
+			RemoveCmd:      "sudo pacman -Rns npm  # npm comes with nodejs",
+		}
+	}
+
+	globalList, _ := RunCmd("npm", "list", "-g", "--depth=0", "--json")
 	pkgName := extractNpmPkgName(globalList, base)
 	if pkgName == "" {
 		pkgName = base

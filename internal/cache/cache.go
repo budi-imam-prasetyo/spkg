@@ -10,20 +10,31 @@ import (
 
 var (
 	store *gocache.Cache
-	once  sync.Once
+	mu    sync.RWMutex
+	ttl   time.Duration = 10 * time.Minute
 )
 
 func Init(defaultTTL, cleanupInterval time.Duration) {
-	once.Do(func() {
-		store = gocache.New(defaultTTL, cleanupInterval)
-	})
+	mu.Lock()
+	defer mu.Unlock()
+	ttl = defaultTTL
+	store = gocache.New(defaultTTL, cleanupInterval)
+}
+
+func SetTTL(newTTL time.Duration) {
+	mu.Lock()
+	defer mu.Unlock()
+	ttl = newTTL
 }
 
 func Get(key string) (*detector.Result, bool) {
-	if store == nil {
+	mu.RLock()
+	s := store
+	mu.RUnlock()
+	if s == nil {
 		return nil, false
 	}
-	v, found := store.Get(key)
+	v, found := s.Get(key)
 	if !found {
 		return nil, false
 	}
@@ -32,38 +43,56 @@ func Get(key string) (*detector.Result, bool) {
 }
 
 func Set(key string, r *detector.Result) {
-	if store == nil {
+	mu.RLock()
+	s := store
+	currentTTL := ttl
+	mu.RUnlock()
+	if s == nil {
 		return
 	}
-	store.Set(key, r, gocache.DefaultExpiration)
+	s.Set(key, r, currentTTL)
 }
 
-func SetWithTTL(key string, r *detector.Result, ttl time.Duration) {
-	if store == nil {
+func SetWithTTL(key string, r *detector.Result, itemTTL time.Duration) {
+	mu.RLock()
+	s := store
+	mu.RUnlock()
+	if s == nil {
 		return
 	}
-	store.Set(key, r, ttl)
+	s.Set(key, r, itemTTL)
 }
 
 func Clear() {
-	if store == nil {
+	mu.RLock()
+	s := store
+	mu.RUnlock()
+	if s == nil {
 		return
 	}
-	store.Flush()
+	s.Flush()
 }
 
 func Stats() map[string]int {
-	if store == nil {
+	mu.RLock()
+	s := store
+	currentTTL := ttl
+	mu.RUnlock()
+	if s == nil {
 		return map[string]int{"items": 0}
 	}
 	return map[string]int{
-		"items": store.ItemCount(),
+		"items":      s.ItemCount(),
+		"ttl_secs":   int(currentTTL.Seconds()),
 	}
 }
 
 func Items() map[string]gocache.Item {
-	if store == nil {
+	mu.RLock()
+	s := store
+	mu.RUnlock()
+	if s == nil {
 		return nil
 	}
-	return store.Items()
+	return s.Items()
 }

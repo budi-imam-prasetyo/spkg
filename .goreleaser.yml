@@ -1,4 +1,4 @@
-project_name: pkg-origin
+project_name: spkg
 
 before:
   hooks:
@@ -6,7 +6,7 @@ before:
 
 builds:
   - main: .
-    binary: pkg-origin
+    binary: spkg
     env:
       - CGO_ENABLED=0
     goos:

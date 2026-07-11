@@ -1,6 +1,7 @@
 package detector
 
 import (
+	"path/filepath"
 	"strings"
 )
 
@@ -15,12 +16,26 @@ func (d *GemDetector) IsAvailable() bool {
 }
 
 func (d *GemDetector) Detect(execPath string) *Result {
+	base := filepath.Base(execPath)
+
+	// If detecting gem itself, show how to install/remove Ruby/gem
+	if base == "gem" || base == "ruby" {
+		return &Result{
+			Found:          true,
+			ExecutablePath: execPath,
+			Manager:        ManagerGem,
+			Package:        "ruby",
+			InstallCmd:     "sudo pacman -S ruby  # or: sudo apt install ruby",
+			UpgradeCmd:     "sudo pacman -Syu ruby",
+			RemoveCmd:      "sudo pacman -Rns ruby  # or: sudo apt remove ruby",
+		}
+	}
+
 	list, err := RunCmd("gem", "list", "-d")
 	if err != nil {
 		return nil
 	}
 
-	base := strings.TrimSuffix(strings.TrimPrefix(execPath, "/usr/bin/"), "")
 	for _, block := range strings.Split(list, "\n\n") {
 		lines := strings.Split(block, "\n")
 		if len(lines) < 1 {

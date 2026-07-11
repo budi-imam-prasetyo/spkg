@@ -22,7 +22,22 @@ func (d *PipDetector) Detect(execPath string) *Result {
 		pipCmd = "pip3"
 	}
 
-	show, err := RunCmd(pipCmd, "show", filepath.Base(execPath))
+	base := filepath.Base(execPath)
+
+	// If detecting pip itself, show how to install/remove pip
+	if base == "pip" || base == "pip3" {
+		return &Result{
+			Found:          true,
+			ExecutablePath: execPath,
+			Manager:        ManagerPip,
+			Package:        "python-pip",
+			InstallCmd:     "sudo pacman -S python-pip  # or: sudo apt install python3-pip",
+			UpgradeCmd:     "sudo pacman -Syu python-pip",
+			RemoveCmd:      "sudo pacman -Rns python-pip  # or: sudo apt remove python3-pip",
+		}
+	}
+
+	show, err := RunCmd(pipCmd, "show", base)
 	if err != nil {
 		return nil
 	}

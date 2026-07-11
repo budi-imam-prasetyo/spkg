@@ -20,12 +20,27 @@ func (d *PnpmDetector) Detect(execPath string) *Result {
 	if prefix == "" {
 		return nil
 	}
-	binDir := filepath.Join(prefix, "node_modules", ".bin")
+	binDir := filepath.Join(prefix, "node_modules", ".bin") + string(filepath.Separator)
 	if !strings.HasPrefix(execPath, binDir) {
 		return nil
 	}
 
 	base := filepath.Base(execPath)
+
+	// If detecting pnpm itself, show how to install/remove pnpm
+	if base == "pnpm" {
+		return &Result{
+			Found:          true,
+			ExecutablePath: execPath,
+			Manager:        ManagerPnpm,
+			Package:        "pnpm",
+			Global:         BoolPtr(true),
+			InstallCmd:     "npm install -g pnpm  # or: curl -fsSL https://get.pnpm.io/install.sh | sh -",
+			UpgradeCmd:     "npm update -g pnpm  # or: pnpm add -g pnpm",
+			RemoveCmd:      "npm uninstall -g pnpm  # or: rm -rf ~/.local/share/pnpm",
+		}
+	}
+
 	list, _ := RunCmd("pnpm", "list", "-g", "--depth=0")
 	pkgName := extractPnpmPkgName(list, base)
 	if pkgName == "" {
@@ -50,7 +65,8 @@ func extractPnpmPkgName(listOutput, binName string) string {
 		if strings.Contains(line, binName) {
 			parts := strings.Fields(line)
 			if len(parts) > 0 {
-				name := strings.Trim(parts[0], "@")
+				name := parts[0]
+				// Strip trailing version: @scope/pkg@2.0.0 → @scope/pkg
 				if idx := strings.LastIndex(name, "@"); idx > 0 {
 					name = name[:idx]
 				}
