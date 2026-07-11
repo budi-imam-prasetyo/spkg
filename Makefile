@@ -1,0 +1,23 @@
+BINARY_NAME=pkg-origin
+VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+LDFLAGS=-ldflags "-s -w -X main.version=$(VERSION)"
+
+.PHONY: build test lint clean install
+
+build:
+	go build $(LDFLAGS) -o $(BINARY_NAME) .
+
+test:
+	go test -v -race -coverprofile=coverage.out ./...
+
+lint:
+	golangci-lint run ./...
+
+clean:
+	rm -f $(BINARY_NAME) coverage.out
+
+install:
+	sudo cp $(BINARY_NAME) /usr/local/bin/
+
+uninstall:
+	sudo rm -f /usr/local/bin/$(BINARY_NAME)

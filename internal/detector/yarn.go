@@ -1,0 +1,62 @@
+package detector
+
+import (
+	"path/filepath"
+	"strings"
+)
+
+type YarnDetector struct{}
+
+func init() { Register(&YarnDetector{}) }
+
+func (d *YarnDetector) Name() Manager { return ManagerYarn }
+
+func (d *YarnDetector) IsAvailable() bool {
+	return HasCommand("yarn")
+}
+
+func (d *YarnDetector) Detect(execPath string) *Result {
+	globalDir, _ := RunCmd("yarn", "global", "dir")
+	if globalDir == "" || strings.Contains(globalDir, "Error") {
+		return nil
+	}
+	binDir := filepath.Join(globalDir, "node_modules", ".bin")
+	if !strings.HasPrefix(execPath, binDir) {
+		return nil
+	}
+
+	base := filepath.Base(execPath)
+	list, _ := RunCmd("yarn", "global", "list", "--depth=0")
+	pkgName := extractYarnPkgName(list, base)
+	if pkgName == "" {
+		pkgName = base
+	}
+
+	return &Result{
+		Found:          true,
+		ExecutablePath: execPath,
+		Manager:        ManagerYarn,
+		Package:        pkgName,
+		Global:         BoolPtr(true),
+		InstallCmd:     "yarn global add " + pkgName,
+		UpgradeCmd:     "yarn global upgrade " + pkgName,
+		RemoveCmd:      "yarn global remove " + pkgName,
+	}
+}
+
+func extractYarnPkgName(listOutput, binName string) string {
+	for _, line := range strings.Split(listOutput, "\n") {
+		if strings.Contains(line, binName) {
+			parts := strings.Fields(line)
+			for _, p := range parts {
+				if strings.Contains(p, "@") {
+					name := strings.Trim(p, ",")
+					if idx := strings.LastIndex(name, "@"); idx > 0 {
+						return name[:idx]
+					}
+				}
+			}
+		}
+	}
+	return ""
+}

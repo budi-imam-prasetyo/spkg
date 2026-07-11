@@ -1,0 +1,20 @@
+# Binary
+pkg-origin
+pkg-origin.exe
+
+# Test
+coverage.out
+*.test
+
+# Build
+dist/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
