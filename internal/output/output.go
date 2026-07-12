@@ -13,11 +13,10 @@ import (
 )
 
 var (
-	checkMark  = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true).Render("✓")
-	crossMark  = lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Bold(true).Render("✗")
-	labelStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Bold(true)
-	valueStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("15"))
-	titleStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("12")).Bold(true)
+	checkMark    = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true).Render("✓")
+	crossMark    = lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Bold(true).Render("✗")
+	labelStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Bold(true)
+	titleStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("12")).Bold(true)
 	runtimeLabel = lipgloss.NewStyle().Foreground(lipgloss.Color("13")).Bold(true)
 )
 

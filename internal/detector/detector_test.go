@@ -300,7 +300,7 @@ func BenchmarkHasCommand(b *testing.B) {
 
 func BenchmarkRunCmd(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		RunCmd("echo", "test")
+		_, _ = RunCmd("echo", "test")
 	}
 }
 

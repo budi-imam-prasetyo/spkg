@@ -1,7 +1,6 @@
 package detector
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 )
@@ -73,22 +72,4 @@ func (d *PipDetector) Detect(execPath string) *Result {
 		UpgradeCmd:     pipCmd + " install --upgrade " + name,
 		RemoveCmd:      pipCmd + " uninstall " + name,
 	}
-}
-
-func detectPipExecInSite(execPath string) bool {
-	sites := []string{
-		filepath.Join(HomeDir(), ".local", "lib"),
-		"/usr/lib",
-		"/usr/local/lib",
-	}
-	for _, site := range sites {
-		matches, _ := filepath.Glob(filepath.Join(site, "python*", "site-packages"))
-		for _, m := range matches {
-			binDir := filepath.Join(filepath.Dir(m), "bin")
-			if _, err := os.Stat(filepath.Join(binDir, filepath.Base(execPath))); err == nil {
-				return true
-			}
-		}
-	}
-	return false
 }
