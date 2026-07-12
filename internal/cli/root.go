@@ -128,12 +128,12 @@ func buildExplain(name string, rp detector.ResolvedPath, r *detector.Result) str
 	dir := filepath.Dir(rp.Real)
 	home := detector.HomeDir()
 
-	b.WriteString(fmt.Sprintf("%s is located at:\n", name))
-	b.WriteString(fmt.Sprintf("  %s\n\n", rp.Real))
+	fmt.Fprintf(&b, "%s is located at:\n", name)
+	fmt.Fprintf(&b, "  %s\n\n", rp.Real)
 
 	if rp.Original != rp.Real {
-		b.WriteString(fmt.Sprintf("Symlink: %s\n", rp.Original))
-		b.WriteString(fmt.Sprintf("Target:  %s\n\n", rp.Real))
+		fmt.Fprintf(&b, "Symlink: %s\n", rp.Original)
+		fmt.Fprintf(&b, "Target:  %s\n\n", rp.Real)
 	}
 
 	if strings.HasPrefix(dir, home) {
@@ -144,12 +144,12 @@ func buildExplain(name string, rp detector.ResolvedPath, r *detector.Result) str
 
 	// Runtime explanation
 	if r.Runtime != "" {
-		b.WriteString(fmt.Sprintf("Runtime: %s\n", r.Runtime))
+		fmt.Fprintf(&b, "Runtime: %s\n", r.Runtime)
 		if r.RuntimeVersion != "" {
-			b.WriteString(fmt.Sprintf("Runtime version: %s\n", r.RuntimeVersion))
+			fmt.Fprintf(&b, "Runtime version: %s\n", r.RuntimeVersion)
 		}
 		if r.RuntimeManager != "" {
-			b.WriteString(fmt.Sprintf("Runtime manager: %s\n", r.RuntimeManager))
+			fmt.Fprintf(&b, "Runtime manager: %s\n", r.RuntimeManager)
 		}
 		b.WriteString("\n")
 	}
@@ -167,7 +167,7 @@ func buildExplain(name string, rp detector.ResolvedPath, r *detector.Result) str
 	case detector.ManagerPipx:
 		b.WriteString("pipx manages Python CLI tools in isolated virtual environments.\n")
 		if r.VirtualEnv != "" {
-			b.WriteString(fmt.Sprintf("Virtual env: %s\n", r.VirtualEnv))
+			fmt.Fprintf(&b, "Virtual env: %s\n", r.VirtualEnv)
 		}
 	case detector.ManagerCargo:
 		b.WriteString("cargo installed this from crates.io to ~/.cargo/bin.\n")
@@ -185,7 +185,7 @@ func buildExplain(name string, rp detector.ResolvedPath, r *detector.Result) str
 		b.WriteString("No package manager claims this executable.\n")
 		b.WriteString("It was likely installed manually or built from source.\n")
 	default:
-		b.WriteString(fmt.Sprintf("Installed by %s.\n", string(r.Manager)))
+		fmt.Fprintf(&b, "Installed by %s.\n", string(r.Manager))
 	}
 
 	return b.String()

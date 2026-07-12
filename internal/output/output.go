@@ -171,57 +171,61 @@ func printPretty(r *detector.Result) {
 	}
 }
 
+func twf(w *tabwriter.Writer, format string, a ...any) {
+	_, _ = fmt.Fprintf(w, format, a...)
+}
+
 func printTableResult(r *detector.Result) {
 	if !r.Found {
 		fmt.Printf("%s\n", crossMark+" executable tidak ditemukan")
 		return
 	}
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintf(w, "%s\n", checkMark+" Package ditemukan\n")
-	fmt.Fprintf(w, "\n")
-	fmt.Fprintf(w, "%s\t%s\n", labelStyle.Render("Executable:"), r.ExecutablePath)
-	fmt.Fprintf(w, "%s\t%s\n", labelStyle.Render("Package manager:"), string(r.Manager))
+	twf(w, "%s\n", checkMark+" Package ditemukan\n")
+	twf(w, "\n")
+	twf(w, "%s\t%s\n", labelStyle.Render("Executable:"), r.ExecutablePath)
+	twf(w, "%s\t%s\n", labelStyle.Render("Package manager:"), string(r.Manager))
 	if r.Runtime != "" {
-		fmt.Fprintf(w, "%s\t%s\n", runtimeLabel.Render("Runtime:"), string(r.Runtime))
+		twf(w, "%s\t%s\n", runtimeLabel.Render("Runtime:"), string(r.Runtime))
 		if r.RuntimeVersion != "" {
-			fmt.Fprintf(w, "%s\t%s\n", runtimeLabel.Render("Runtime version:"), r.RuntimeVersion)
+			twf(w, "%s\t%s\n", runtimeLabel.Render("Runtime version:"), r.RuntimeVersion)
 		}
 		if r.RuntimeManager != "" {
-			fmt.Fprintf(w, "%s\t%s\n", runtimeLabel.Render("Runtime manager:"), r.RuntimeManager)
+			twf(w, "%s\t%s\n", runtimeLabel.Render("Runtime manager:"), r.RuntimeManager)
 		}
 	}
 	if r.Package != "" {
-		fmt.Fprintf(w, "%s\t%s\n", labelStyle.Render("Package:"), r.Package)
+		twf(w, "%s\t%s\n", labelStyle.Render("Package:"), r.Package)
 	}
 	if r.Repository != "" {
-		fmt.Fprintf(w, "%s\t%s\n", labelStyle.Render("Repository:"), r.Repository)
+		twf(w, "%s\t%s\n", labelStyle.Render("Repository:"), r.Repository)
 	}
 	if r.IsAUR {
-		fmt.Fprintf(w, "%s\tyes\n", labelStyle.Render("AUR:"))
+		twf(w, "%s\tyes\n", labelStyle.Render("AUR:"))
 	}
 	if r.Version != "" {
-		fmt.Fprintf(w, "%s\t%s\n", labelStyle.Render("Version:"), r.Version)
+		twf(w, "%s\t%s\n", labelStyle.Render("Version:"), r.Version)
 	}
 	if r.Global != nil && *r.Global {
-		fmt.Fprintf(w, "%s\tyes\n", labelStyle.Render("Global:"))
+		twf(w, "%s\tyes\n", labelStyle.Render("Global:"))
 	}
 	if r.PythonVersion != "" {
-		fmt.Fprintf(w, "%s\t%s\n", labelStyle.Render("Python:"), r.PythonVersion)
+		twf(w, "%s\t%s\n", labelStyle.Render("Python:"), r.PythonVersion)
 	}
 	if r.VirtualEnv != "" {
-		fmt.Fprintf(w, "%s\t%s\n", labelStyle.Render("Virtual env:"), r.VirtualEnv)
+		twf(w, "%s\t%s\n", labelStyle.Render("Virtual env:"), r.VirtualEnv)
 	}
 	if r.Remote != "" {
-		fmt.Fprintf(w, "%s\t%s\n", labelStyle.Render("Remote:"), r.Remote)
+		twf(w, "%s\t%s\n", labelStyle.Render("Remote:"), r.Remote)
 	}
 	if r.Confidence > 0 {
-		fmt.Fprintf(w, "%s\t%d%%\n", labelStyle.Render("Confidence:"), r.Confidence)
+		twf(w, "%s\t%d%%\n", labelStyle.Render("Confidence:"), r.Confidence)
 	}
-	fmt.Fprintf(w, "\n")
-	fmt.Fprintf(w, "%s\t%s\n", labelStyle.Render("Install:"), r.InstallCmd)
-	fmt.Fprintf(w, "%s\t%s\n", labelStyle.Render("Upgrade:"), r.UpgradeCmd)
-	fmt.Fprintf(w, "%s\t%s\n", labelStyle.Render("Remove:"), r.RemoveCmd)
-	w.Flush()
+	twf(w, "\n")
+	twf(w, "%s\t%s\n", labelStyle.Render("Install:"), r.InstallCmd)
+	twf(w, "%s\t%s\n", labelStyle.Render("Upgrade:"), r.UpgradeCmd)
+	twf(w, "%s\t%s\n", labelStyle.Render("Remove:"), r.RemoveCmd)
+	_ = w.Flush()
 }
 
 func printPlainResult(r *detector.Result) {
@@ -266,8 +270,8 @@ func printYAML(r *data) {
 
 func printTable(results []*detector.Result) {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintf(w, "%s\t%s\t%s\n", titleStyle.Render("Executable"), titleStyle.Render("Manager"), titleStyle.Render("Runtime"))
-	fmt.Fprintf(w, "%s\t%s\t%s\n", "────────────", "──────────────", "──────────────")
+	twf(w, "%s\t%s\t%s\n", titleStyle.Render("Executable"), titleStyle.Render("Manager"), titleStyle.Render("Runtime"))
+	twf(w, "%s\t%s\t%s\n", "────────────", "──────────────", "──────────────")
 	for _, r := range results {
 		name := r.ExecutablePath
 		if idx := strings.LastIndex(name, "/"); idx != -1 {
@@ -277,9 +281,9 @@ func printTable(results []*detector.Result) {
 		if rt == "" {
 			rt = "-"
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\n", name, string(r.Manager), rt)
+		twf(w, "%s\t%s\t%s\n", name, string(r.Manager), rt)
 	}
-	w.Flush()
+	_ = w.Flush()
 }
 
 func printPlainTable(results []*detector.Result) {
