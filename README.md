@@ -285,4 +285,4 @@ func init() { Register(&MyToolDetector{}) }
 
 ## 📄 Lisensi
 
-MIT — lihat [LICENSE](LICENSE).
+MIT — lihat [LICENSE](LICENSE). Lisensi dependency pihak ketiga: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

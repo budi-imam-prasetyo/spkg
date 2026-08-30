@@ -25,3 +25,4 @@ agent-skills/
 *.md
 !README.md
 !CHANGELOG.md
+!THIRD_PARTY_NOTICES.md
