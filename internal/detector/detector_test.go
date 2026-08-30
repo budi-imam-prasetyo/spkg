@@ -120,6 +120,9 @@ func TestRuntimeRegistry(t *testing.T) {
 
 func TestDetectFirst(t *testing.T) {
 	rp := ResolvedPath{Original: "/usr/bin/ls", Real: "/usr/bin/ls"}
+	if _, err := RunCmdStdout("pacman", "--version"); err != nil {
+		t.Skip("requires an Arch system where pacman claims /usr/bin/ls")
+	}
 	r := DetectFirst(rp)
 	if r == nil {
 		t.Fatal("expected to find ls")
@@ -131,6 +134,9 @@ func TestDetectFirst(t *testing.T) {
 
 func TestDetectWithRuntime(t *testing.T) {
 	rp := ResolvedPath{Original: "/usr/bin/ls", Real: "/usr/bin/ls"}
+	if _, err := RunCmdStdout("pacman", "--version"); err != nil {
+		t.Skip("requires an Arch system where pacman claims /usr/bin/ls")
+	}
 	r := DetectWithRuntime(rp, "ls")
 	if r == nil {
 		t.Fatal("expected to find ls")
