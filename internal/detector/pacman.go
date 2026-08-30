@@ -77,10 +77,19 @@ func (d *PacmanDetector) Detect(execPath string) *Result {
 		}
 	}
 
+	// An AUR package installed by a helper (paru/yay/...) is owned by that
+	// helper, not by pacman itself. Report the helper as the manager so batch
+	// (Source) and single (Install/Upgrade/Remove) views agree, instead of
+	// showing "pacman" with "paru -S" style commands.
+	manager := ManagerPacman
+	if isAUR && aurHelper != "" {
+		manager = Manager(aurHelper)
+	}
+
 	return &Result{
 		Found:          true,
 		ExecutablePath: execPath,
-		Manager:        ManagerPacman,
+		Manager:        manager,
 		Package:        pkgName,
 		Version:        version,
 		Repository:     repo,
