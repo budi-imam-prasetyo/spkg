@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 
@@ -51,21 +52,33 @@ func TestRootBatchAllMissingFails(t *testing.T) {
 // Regression: output order must follow input order even when some args are
 // already cached and others need detection.
 func TestRootBatchPreservesInputOrder(t *testing.T) {
+	// Use coreutils every Linux distro ships with a stable basename. python3,
+	// node, etc. are symlinks whose resolved basename varies across distros
+	// (python3 -> python3.12 on Ubuntu), which makes the position assertion
+	// brittle. We only assert ordering, not the manager.
+	bins := []string{"ls", "cat", "grep"}
+	for _, b := range bins {
+		if _, err := exec.LookPath(b); err != nil {
+			t.Skipf("%s not installed; cannot test order deterministically", b)
+		}
+	}
+	hit := bins[1] // "cat": the cache-hit entry, sits in the middle.
+
 	// Clear so the warm-up below is the only cache hit in the batch run.
 	cache.Clear()
 
-	// Warm the cache for git only, so `git` is a cache hit while the others
-	// are misses, and git sits in the middle of the argument list.
+	// Warm the cache for "cat" only, so it's a cache hit while the others
+	// are misses, and it sits in the middle of the argument list.
 	cmd := NewRootCmd()
 	_ = cmd.PersistentFlags().Set("output", "plain")
-	cmd.SetArgs([]string{"git"})
+	cmd.SetArgs([]string{hit})
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
 	_ = cmd.Execute()
 
 	cmd = NewRootCmd()
 	_ = cmd.PersistentFlags().Set("output", "plain")
-	cmd.SetArgs([]string{"python3", "git", "cargo"})
+	cmd.SetArgs(bins)
 
 	old := os.Stdout
 	r, w, err := os.Pipe()
@@ -95,12 +108,12 @@ func TestRootBatchPreservesInputOrder(t *testing.T) {
 		return -1
 	}
 
-	py, git, cargo := pos("python3"), pos("git"), pos("cargo")
-	if py < 0 || git < 0 || cargo < 0 {
+	a, b, c := pos(bins[0]), pos(bins[1]), pos(bins[2])
+	if a < 0 || b < 0 || c < 0 {
 		t.Fatalf("missing an entry in output:\n%s", out.String())
 	}
-	if py >= git || git >= cargo {
-		t.Fatalf("output order not preserved (python3=%d git=%d cargo=%d):\n%s", py, git, cargo, out.String())
+	if a >= b || b >= c {
+		t.Fatalf("output order not preserved (%s=%d %s=%d %s=%d):\n%s", bins[0], a, bins[1], b, bins[2], c, out.String())
 	}
 }
 

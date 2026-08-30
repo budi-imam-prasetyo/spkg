@@ -137,6 +137,12 @@ func TestScoreCargo(t *testing.T) {
 }
 
 func TestDetectWithRuntimeConfidence_Pacman(t *testing.T) {
+	// End-to-end pacman ownership check: requires an Arch system where
+	// /usr/bin/git actually belongs to the pacman DB. Skip elsewhere (CI
+	// runs on Ubuntu).
+	if _, err := RunCmdStdout("pacman", "--version"); err != nil {
+		t.Skip("pacman not available; skipping Arch-specific end-to-end check")
+	}
 	rp := ResolvedPath{Original: "/usr/bin/git", Real: "/usr/bin/git"}
 	r := DetectWithRuntime(rp, "git")
 	if r.Manager != ManagerPacman {
