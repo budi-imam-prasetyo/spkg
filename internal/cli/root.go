@@ -115,6 +115,9 @@ func runDetect(cmd *cobra.Command, args []string) error {
 				if !noCache {
 					cache.Set(missPaths[n].Real, r)
 				}
+				// Report the name the user typed, not the symlink-resolved
+				// basename (npm -> npm-cli.js, node -> node, etc.).
+				r.Executable = missNames[n]
 				results[missIdx[n]] = r
 			}
 		}
@@ -165,6 +168,9 @@ func runDetect(cmd *cobra.Command, args []string) error {
 	}
 
 	r := detector.DetectWithRuntime(rp, name)
+	// Report the name the user typed, not the symlink-resolved basename
+	// (npm -> npm-cli.js, node -> node, etc.).
+	r.Executable = name
 
 	if !noCache {
 		cache.Set(rp.Real, r)

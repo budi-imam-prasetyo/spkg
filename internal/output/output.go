@@ -326,10 +326,20 @@ func printYAML(r *data) {
 	fmt.Print(string(out))
 }
 
+// DisplayName returns the name the user typed for a result, falling back to
+// the basename of the resolved path when Executable was not recorded. This
+// avoids exposing symlink-resolved names like npm-cli.js for `npm`.
+func DisplayName(r *detector.Result) string {
+	if r.Executable != "" {
+		return r.Executable
+	}
+	return filepath.Base(r.ExecutablePath)
+}
+
 func printTable(results []*detector.Result) {
 	rows := make([][]string, 0, len(results))
 	for _, r := range results {
-		rows = append(rows, []string{filepath.Base(r.ExecutablePath), string(r.Manager)})
+		rows = append(rows, []string{DisplayName(r), string(r.Manager)})
 	}
 	fmt.Println(borderedTable([]string{"Executable", "Source"}, rows, func(row, col int) lipgloss.Style {
 		style := lipgloss.NewStyle().Padding(0, 1)
@@ -347,10 +357,7 @@ func printPlainTable(results []*detector.Result) {
 	fmt.Printf("%-20s %-15s %s\n", "Executable", "Manager", "Runtime")
 	fmt.Printf("%-20s %-15s %s\n", strings.Repeat("─", 20), strings.Repeat("─", 15), strings.Repeat("─", 15))
 	for _, r := range results {
-		name := r.ExecutablePath
-		if idx := strings.LastIndex(name, "/"); idx != -1 {
-			name = name[idx+1:]
-		}
+		name := DisplayName(r)
 		rt := string(r.Runtime)
 		if rt == "" {
 			rt = "-"
@@ -370,7 +377,7 @@ func printJSONList(results []*detector.Result) {
 	var items []item
 	for _, r := range results {
 		items = append(items, item{
-			Executable:     r.ExecutablePath,
+			Executable:     DisplayName(r),
 			Manager:        string(r.Manager),
 			Runtime:        string(r.Runtime),
 			RuntimeVersion: r.RuntimeVersion,
@@ -392,7 +399,7 @@ func printYAMLList(results []*detector.Result) {
 	var items []item
 	for _, r := range results {
 		items = append(items, item{
-			Executable:     r.ExecutablePath,
+			Executable:     DisplayName(r),
 			Manager:        string(r.Manager),
 			Runtime:        string(r.Runtime),
 			RuntimeVersion: r.RuntimeVersion,
