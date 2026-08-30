@@ -30,10 +30,12 @@ func (d *AppImageDetector) Detect(execPath string) *Result {
 	}
 
 	home := HomeDir()
+	// Bound the search to user-owned application directories. We deliberately do
+	// NOT walk system dirs like /opt (potentially huge, slow, and reads unrelated
+	// files). A reasonable file-count cap guards against runaway walks.
 	appImageDirs := []string{
 		filepath.Join(home, "Applications"),
-		"/opt",
-		"/usr/local/bin",
+		filepath.Join(home, ".local", "share", "applications"),
 	}
 	base := filepath.Base(execPath)
 	for _, dir := range appImageDirs {
@@ -41,9 +43,15 @@ func (d *AppImageDetector) Detect(execPath string) *Result {
 			continue
 		}
 		found := false
+		scanned := 0
 		_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 			if found || err != nil || info.IsDir() {
 				return nil
+			}
+			// Cap the number of files we inspect to keep the walk bounded.
+			scanned++
+			if scanned > 2000 {
+				return filepath.SkipDir
 			}
 			if strings.HasSuffix(path, ".desktop") {
 				content, _ := os.ReadFile(path)
@@ -67,4 +75,15 @@ func (d *AppImageDetector) Detect(execPath string) *Result {
 	}
 
 	return nil
+}
+
+func (d *AppImageDetector) Score(execPath string) (Confidence, []Reason) {
+	home := HomeDir()
+	dirs := []string{filepath.Join(home, "Applications"), filepath.Join(home, ".local", "share", "applications")}
+	for _, dir := range dirs {
+		if strings.HasPrefix(execPath, dir) {
+			return ConfidenceLow, []Reason{{Signal: "path_match", Detail: "path is in an AppImage application dir", Weight: int(ConfidenceLow)}}
+		}
+	}
+	return ConfidenceUnknown, nil
 }

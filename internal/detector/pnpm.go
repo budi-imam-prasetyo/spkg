@@ -76,3 +76,13 @@ func extractPnpmPkgName(listOutput, binName string) string {
 	}
 	return ""
 }
+
+func (d *PnpmDetector) Score(execPath string) (Confidence, []Reason) {
+	home := HomeDir()
+	store := filepath.Join(home, ".local", "share", "pnpm")
+	global := filepath.Join(home, ".pnpm-store")
+	if strings.HasPrefix(execPath, store) || strings.HasPrefix(execPath, global) || strings.HasPrefix(execPath, filepath.Join(home, ".local", "bin")) {
+		return ConfidenceLow, []Reason{{Signal: "ambiguous_path", Detail: "path is under a pnpm store/shared bin dir", Weight: int(ConfidenceLow)}}
+	}
+	return ConfidenceUnknown, nil
+}

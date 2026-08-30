@@ -1,6 +1,7 @@
 package detector
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -61,6 +62,19 @@ func TestRunCmd_Error(t *testing.T) {
 	_, err := RunCmd("false")
 	if err == nil {
 		t.Fatal("expected error from false command")
+	}
+}
+
+func TestRunCmdVerboseReportsError(t *testing.T) {
+	var diagnostics strings.Builder
+	SetDiagnostics(true, &diagnostics)
+	t.Cleanup(func() { SetDiagnostics(false, nil) })
+	_, err := RunCmd("false")
+	if err == nil {
+		t.Fatal("expected error from false command")
+	}
+	if !strings.Contains(diagnostics.String(), "false") || !strings.Contains(diagnostics.String(), "failed") {
+		t.Fatalf("diagnostics = %q, want command failure", diagnostics.String())
 	}
 }
 
@@ -275,6 +289,20 @@ func TestExtractNpmPackageName(t *testing.T) {
 		if got != tt.want {
 			t.Errorf("extractNpmPackageName(%q) = %q, want %q", tt.path, got, tt.want)
 		}
+	}
+}
+
+func TestDetectBatchPreservesInputOrder(t *testing.T) {
+	paths := []ResolvedPath{
+		{Original: "/tmp/spkg-batch/first", Real: "/tmp/spkg-batch/first"},
+		{Original: "/tmp/spkg-batch/second", Real: "/tmp/spkg-batch/second"},
+	}
+	results := DetectBatch(paths, []string{"first", "second"})
+	if len(results) != 2 {
+		t.Fatalf("len(results) = %d, want 2", len(results))
+	}
+	if results[0].Executable != "first" || results[1].Executable != "second" {
+		t.Fatalf("batch order = %q, %q", results[0].Executable, results[1].Executable)
 	}
 }
 

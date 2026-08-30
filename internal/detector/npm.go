@@ -43,9 +43,9 @@ func (d *NpmDetector) Detect(execPath string) *Result {
 			Manager:        ManagerNpm,
 			Package:        "npm",
 			Global:         BoolPtr(true),
-			InstallCmd:     "sudo pacman -S npm  # or: curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo bash - && sudo apt install -y nodejs",
-			UpgradeCmd:     "sudo pacman -Syu npm",
-			RemoveCmd:      "sudo pacman -Rns npm  # npm comes with nodejs",
+			InstallCmd:     "npm install -g npm",
+			UpgradeCmd:     "npm install -g npm@latest",
+			RemoveCmd:      "# npm is normally installed with Node.js",
 		}
 	}
 
@@ -79,4 +79,11 @@ func extractNpmPkgName(jsonOutput, binName string) string {
 		}
 	}
 	return ""
+}
+
+func (d *NpmDetector) Score(execPath string) (Confidence, []Reason) {
+	if strings.Contains(execPath, "node_modules") || strings.Contains(execPath, ".nvm") || strings.Contains(execPath, "fnm") || strings.Contains(execPath, "/.volta/") {
+		return ConfidenceMedium, []Reason{{Signal: "path_match", Detail: "path is under a node_modules or node runtime dir", Weight: int(ConfidenceMedium)}}
+	}
+	return ConfidenceUnknown, nil
 }

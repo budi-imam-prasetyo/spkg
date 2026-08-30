@@ -75,3 +75,12 @@ func extractYarnPkgName(listOutput, binName string) string {
 	}
 	return ""
 }
+
+func (d *YarnDetector) Score(execPath string) (Confidence, []Reason) {
+	home := HomeDir()
+	global := filepath.Join(home, ".yarn")
+	if strings.HasPrefix(execPath, global) || strings.HasPrefix(execPath, filepath.Join(home, ".local", "bin")) {
+		return ConfidenceLow, []Reason{{Signal: "ambiguous_path", Detail: "path is under a yarn global/shared bin dir", Weight: int(ConfidenceLow)}}
+	}
+	return ConfidenceUnknown, nil
+}

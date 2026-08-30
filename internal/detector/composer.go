@@ -35,9 +35,9 @@ func (d *ComposerDetector) Detect(execPath string) *Result {
 			ExecutablePath: execPath,
 			Manager:        ManagerComposer,
 			Package:        "composer",
-			InstallCmd:     "sudo pacman -S composer  # or: curl -sS https://getcomposer.org/installer | php",
-			UpgradeCmd:     "sudo pacman -Syu composer  # or: composer self-update",
-			RemoveCmd:      "sudo pacman -Rns composer  # or: rm /usr/local/bin/composer",
+			InstallCmd:     "# Install Composer from https://getcomposer.org/download/",
+			UpgradeCmd:     "composer self-update",
+			RemoveCmd:      "composer self-update --clean-backups",
 		}
 	}
 
@@ -51,4 +51,13 @@ func (d *ComposerDetector) Detect(execPath string) *Result {
 		UpgradeCmd:     "composer global update " + base,
 		RemoveCmd:      "composer global remove " + base,
 	}
+}
+
+func (d *ComposerDetector) Score(execPath string) (Confidence, []Reason) {
+	home := HomeDir()
+	vendor := filepath.Join(home, ".config", "composer", "vendor")
+	if strings.HasPrefix(execPath, vendor) || strings.HasPrefix(execPath, "/usr/local/bin") {
+		return ConfidenceLow, []Reason{{Signal: "ambiguous_path", Detail: "global composer bin dir overlaps with system bin", Weight: int(ConfidenceLow)}}
+	}
+	return ConfidenceUnknown, nil
 }

@@ -33,6 +33,12 @@ func (d *UvDetector) Detect(execPath string) *Result {
 			parts := strings.Fields(line)
 			if len(parts) > 0 {
 				pkgName := parts[0]
+				// Require the binary to live in uv's tool bin dir
+				// (~/.local/bin, shared with pipx) before trusting the match.
+				uvToolBin := filepath.Join(home, ".local", "bin")
+				if !strings.HasPrefix(execPath, uvToolBin) {
+					continue
+				}
 				return &Result{
 					Found:          true,
 					ExecutablePath: execPath,
@@ -47,4 +53,13 @@ func (d *UvDetector) Detect(execPath string) *Result {
 	}
 
 	return nil
+}
+
+func (d *UvDetector) Score(execPath string) (Confidence, []Reason) {
+	home := HomeDir()
+	uvToolBin := filepath.Join(home, ".local", "bin")
+	if strings.HasPrefix(execPath, uvToolBin) {
+		return ConfidenceLow, []Reason{{Signal: "ambiguous_path", Detail: "path is in uv's shared tool bin dir", Weight: int(ConfidenceLow)}}
+	}
+	return ConfidenceUnknown, nil
 }

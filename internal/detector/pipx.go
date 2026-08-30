@@ -64,19 +64,36 @@ func (d *PipxDetector) Detect(execPath string) *Result {
 			if len(parts) > 0 {
 				pkgName := strings.TrimRight(parts[0], ":")
 				venv := filepath.Join(home, ".local", "pipx", "venvs", pkgName)
-				return &Result{
-					Found:          true,
-					ExecutablePath: execPath,
-					Manager:        ManagerPipx,
-					Package:        pkgName,
-					VirtualEnv:     venv,
-					InstallCmd:     "pipx install " + pkgName,
-					UpgradeCmd:     "pipx upgrade " + pkgName,
-					RemoveCmd:      "pipx uninstall " + pkgName,
+				// Only trust this match if the binary actually lives inside a
+				// pipx-managed venv (pipx/uv/brew share ~/.local/bin).
+				if _, err := os.Stat(filepath.Join(venv, "bin", base)); err == nil {
+					return &Result{
+						Found:          true,
+						ExecutablePath: execPath,
+						Manager:        ManagerPipx,
+						Package:        pkgName,
+						VirtualEnv:     venv,
+						InstallCmd:     "pipx install " + pkgName,
+						UpgradeCmd:     "pipx upgrade " + pkgName,
+						RemoveCmd:      "pipx uninstall " + pkgName,
+					}
 				}
 			}
 		}
 	}
 
 	return nil
+}
+
+func (d *PipxDetector) Score(execPath string) (Confidence, []Reason) {
+	home := HomeDir()
+	venvBin := filepath.Join(home, ".local", "pipx", "venvs")
+	if strings.HasPrefix(execPath, venvBin) {
+		return ConfidenceMedium, []Reason{{Signal: "path_match", Detail: "path is inside a pipx venv", Weight: int(ConfidenceMedium)}}
+	}
+	localBin := filepath.Join(home, ".local", "bin")
+	if strings.HasPrefix(execPath, localBin) {
+		return ConfidenceLow, []Reason{{Signal: "ambiguous_path", Detail: "path is in pipx's shared bin dir", Weight: int(ConfidenceLow)}}
+	}
+	return ConfidenceUnknown, nil
 }

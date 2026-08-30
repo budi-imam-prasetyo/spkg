@@ -35,9 +35,9 @@ func (d *GoDetector) Detect(execPath string) *Result {
 			ExecutablePath: execPath,
 			Manager:        ManagerGo,
 			Package:        "go",
-			InstallCmd:     "sudo pacman -S go  # or: sudo snap install go --classic",
-			UpgradeCmd:     "sudo pacman -Syu go",
-			RemoveCmd:      "sudo pacman -Rns go  # or: sudo snap remove go",
+			InstallCmd:     "# Install Go from https://go.dev/dl/",
+			UpgradeCmd:     "# Install the latest Go release from https://go.dev/dl/",
+			RemoveCmd:      "# Remove the Go installation directory",
 		}
 	}
 
@@ -50,4 +50,13 @@ func (d *GoDetector) Detect(execPath string) *Result {
 		UpgradeCmd:     "go install " + base + "@latest",
 		RemoveCmd:      "rm " + execPath,
 	}
+}
+
+func (d *GoDetector) Score(execPath string) (Confidence, []Reason) {
+	home := HomeDir()
+	binDir := filepath.Join(home, "go", "bin")
+	if strings.HasPrefix(execPath, binDir) || strings.HasPrefix(execPath, "/usr/local/go/bin") {
+		return ConfidenceMedium, []Reason{{Signal: "path_match", Detail: "path is in GOPATH bin or go install dir", Weight: int(ConfidenceMedium)}}
+	}
+	return ConfidenceUnknown, nil
 }

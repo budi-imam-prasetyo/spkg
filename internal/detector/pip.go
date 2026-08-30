@@ -30,10 +30,18 @@ func (d *PipDetector) Detect(execPath string) *Result {
 			ExecutablePath: execPath,
 			Manager:        ManagerPip,
 			Package:        "python-pip",
-			InstallCmd:     "sudo pacman -S python-pip  # or: sudo apt install python3-pip",
-			UpgradeCmd:     "sudo pacman -Syu python-pip",
-			RemoveCmd:      "sudo pacman -Rns python-pip  # or: sudo apt remove python3-pip",
+			InstallCmd:     "python -m ensurepip --upgrade",
+			UpgradeCmd:     "python -m pip install --upgrade pip",
+			RemoveCmd:      "python -m pip uninstall pip",
 		}
+	}
+
+	// Only claim ownership if the executable lives in a directory pip actually
+	// manages (a venv / virtualenv / user scheme bin). Without this guard, a
+	// binary whose *name* matches a pip package (but is installed by pipx, uv,
+	// brew, conda, ...) would be falsely attributed to pip.
+	if !pipOwnsPath(execPath) {
+		return nil
 	}
 
 	show, err := RunCmd(pipCmd, "show", base)
@@ -72,4 +80,44 @@ func (d *PipDetector) Detect(execPath string) *Result {
 		UpgradeCmd:     pipCmd + " install --upgrade " + name,
 		RemoveCmd:      pipCmd + " uninstall " + name,
 	}
+}
+
+// pipOwnsPath reports whether execPath sits under a directory controlled by a
+// Python environment (venv, virtualenv, or a user scheme bin). pip/pipx/uv share
+// the same ~/.local/bin, so callers must check this before attributing a binary
+// to pip by name alone.
+func pipOwnsPath(execPath string) bool {
+	home := HomeDir()
+	candidates := []string{
+		filepath.Join(home, ".local", "bin"),
+		filepath.Join(home, ".local", "bin", ""),
+		filepath.Join(home, ".local", "share", "python-wheels"),
+		"/usr/local/bin",
+		"/usr/bin",
+	}
+	for _, c := range candidates {
+		if c != "" && strings.HasPrefix(execPath, c) {
+			return true
+		}
+	}
+	// Any .../venv/bin or .../site-packages or .../bin under a python env.
+	if strings.Contains(execPath, "site-packages") || strings.Contains(execPath, "bin/python") {
+		return true
+	}
+	return false
+}
+
+func (d *PipDetector) Score(execPath string) (Confidence, []Reason) {
+	home := HomeDir()
+	candidates := []string{
+		filepath.Join(home, ".local", "bin"),
+		"/usr/local/bin",
+		"/usr/bin",
+	}
+	for _, c := range candidates {
+		if strings.HasPrefix(execPath, c) {
+			return ConfidenceLow, []Reason{{Signal: "ambiguous_path", Detail: "path is in a dir pip may manage (shared with pipx/uv/brew)", Weight: int(ConfidenceLow)}}
+		}
+	}
+	return ConfidenceUnknown, nil
 }

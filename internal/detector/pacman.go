@@ -57,6 +57,26 @@ func (d *PacmanDetector) Detect(execPath string) *Result {
 		}
 	}
 
+	// Detect which AUR helper was used to install this package
+	aurHelper := ""
+	installCmd := "sudo pacman -S " + pkgName
+	upgradeCmd := "sudo pacman -Syu " + pkgName
+	removeCmd := "sudo pacman -Rns " + pkgName
+
+	if isAUR {
+		// Try to detect AUR helper by checking if they're installed
+		// Priority: paru > yay > pikaur > pakku
+		for _, helper := range []string{"paru", "yay", "pikaur", "pakku"} {
+			if _, err := RunCmd("which", helper); err == nil {
+				aurHelper = helper
+				installCmd = helper + " -S " + pkgName
+				upgradeCmd = helper + " -Syu " + pkgName
+				removeCmd = helper + " -Rns " + pkgName
+				break
+			}
+		}
+	}
+
 	return &Result{
 		Found:          true,
 		ExecutablePath: execPath,
@@ -65,8 +85,23 @@ func (d *PacmanDetector) Detect(execPath string) *Result {
 		Version:        version,
 		Repository:     repo,
 		IsAUR:          isAUR,
-		InstallCmd:     "sudo pacman -S " + pkgName,
-		UpgradeCmd:     "sudo pacman -Syu " + pkgName,
-		RemoveCmd:      "sudo pacman -Rns " + pkgName,
+		AurHelper:      aurHelper,
+		InstallCmd:     installCmd,
+		UpgradeCmd:     upgradeCmd,
+		RemoveCmd:      removeCmd,
+		ConfirmReasons: []Reason{{
+			Signal: "manager_db",
+			Detail: "pacman -Qo confirms ownership by package " + pkgName,
+			Weight: int(ConfidenceHigh),
+		}},
 	}
+}
+
+func (d *PacmanDetector) Score(execPath string) (Confidence, []Reason) {
+	// pacman owns anything under the system root that isn't a known user/alt
+	// domain. We give a medium structural floor; confirmation comes from -Qo.
+	if strings.HasPrefix(execPath, "/usr/bin/") || strings.HasPrefix(execPath, "/usr/lib/") || strings.HasPrefix(execPath, "/bin/") || strings.HasPrefix(execPath, "/opt/") {
+		return ConfidenceMedium, []Reason{{Signal: "path_match", Detail: "path is under a system install dir (pacman domain)", Weight: int(ConfidenceMedium)}}
+	}
+	return ConfidenceUnknown, nil
 }

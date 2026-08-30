@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
     branches: [main]
 
@@ -42,7 +43,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        goos: [linux, darwin, windows]
+        goos: [linux]
         goarch: [amd64, arm64]
     steps:
       - uses: actions/checkout@v4
@@ -54,9 +55,7 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: |
-          EXT=""
-          if [ "$GOOS" = "windows" ]; then EXT=".exe"; fi
-          OUTPUT="spkg-${GOOS}-${GOARCH}${EXT}"
+          OUTPUT="spkg-${GOOS}-${GOARCH}"
           go build -ldflags="-s -w" -o "dist/${OUTPUT}" .
       - name: Upload artifact
         uses: actions/upload-artifact@v4

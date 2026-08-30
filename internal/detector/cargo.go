@@ -89,3 +89,12 @@ func detectRustVersion() string {
 	out, _ := RunCmd("rustc", "--version")
 	return out
 }
+
+func (d *CargoDetector) Score(execPath string) (Confidence, []Reason) {
+	home := HomeDir()
+	binDir := filepath.Join(home, ".cargo", "bin")
+	if strings.HasPrefix(execPath, binDir) || strings.HasPrefix(execPath, "/usr/local/cargo/bin") {
+		return ConfidenceMedium, []Reason{{Signal: "path_match", Detail: "path is in cargo bin dir", Weight: int(ConfidenceMedium)}}
+	}
+	return ConfidenceUnknown, nil
+}

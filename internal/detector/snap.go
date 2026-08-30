@@ -1,6 +1,8 @@
 package detector
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -42,12 +44,21 @@ func (d *SnapDetector) Detect(execPath string) *Result {
 				Manager:        ManagerSnap,
 				Package:        name,
 				Version:        version,
-				InstallCmd:     "sudo snap install " + name,
-				UpgradeCmd:     "sudo snap refresh " + name,
-				RemoveCmd:      "sudo snap remove " + name,
+				InstallCmd:     "snap install " + name,
+				UpgradeCmd:     "snap refresh " + name,
+				RemoveCmd:      "snap remove " + name,
 			}
 		}
 	}
 
 	return nil
+}
+
+func (d *SnapDetector) Score(execPath string) (Confidence, []Reason) {
+	if _, err := os.Stat(filepath.Join("/snap", "bin")); err == nil {
+		if strings.HasPrefix(execPath, "/snap/") {
+			return ConfidenceMedium, []Reason{{Signal: "path_match", Detail: "path is under /snap (snap-managed)", Weight: int(ConfidenceMedium)}}
+		}
+	}
+	return ConfidenceUnknown, nil
 }

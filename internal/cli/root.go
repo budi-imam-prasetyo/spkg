@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/spf13/cobra"
 	"github.com/ryoukaii/spkg/internal/cache"
 	"github.com/ryoukaii/spkg/internal/detector"
 	"github.com/ryoukaii/spkg/internal/output"
+	"github.com/spf13/cobra"
 )
 
 var (
@@ -24,25 +24,38 @@ func NewRootCmd() *cobra.Command {
 	cache.Init(10*time.Minute, 30*time.Minute)
 
 	root := &cobra.Command{
-		Use:   "spkg [command]",
-		Short: "Detect which package manager installed an executable",
+		Use:     "spkg [executable...]",
+		Short:   "Detect which package manager installed an executable",
+		Version: appVersion,
 		Long: `spkg detects which package manager installed a given executable.
-It supports pacman, paru, yay, bun, npm, pnpm, yarn, pip, pipx, uv,
+It supports pacman, bun, npm, pnpm, yarn, pip, pipx, uv,
 cargo, go, gem, composer, flatpak, snap, homebrew, nix, docker, podman,
 and more.
 
 It also detects runtime/version managers: fnm, nvm, volta, asdf, mise,
-pyenv, conda, rbenv, RVM, SDKMAN!, rustup, and others.`,
+pyenv, conda, rbenv, RVM, SDKMAN!, rustup, and others.
+
+You can check multiple executables at once:
+  spkg ls cat grep`,
 		Args: cobra.ArbitraryArgs,
-		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		// Silence the automatic usage dump: callers (notably "executable not
+		// found") want a clean error line, not the full help text. main.go prints
+		// the error itself.
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			if _, ok := output.ParseFormat(format); !ok {
+				return fmt.Errorf("invalid output format %q (expected table, json, yaml, plain, or pretty)", format)
+			}
 			if cacheTTLSec > 0 {
 				cache.SetTTL(time.Duration(cacheTTLSec) * time.Second)
 			}
+			return nil
 		},
 		RunE: runDetect,
 	}
 
-	root.PersistentFlags().StringVarP(&format, "output", "o", "pretty", "Output format: pretty, json, yaml, table, plain")
+	root.PersistentFlags().StringVarP(&format, "output", "o", "table", "Output format: table, json, yaml, plain, pretty")
 	root.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Show verbose detection output")
 	root.PersistentFlags().BoolVar(&noCache, "no-cache", false, "Skip cache")
 	root.PersistentFlags().IntVar(&cacheTTLSec, "cache-ttl", 600, "Cache TTL in seconds (default: 600)")
@@ -56,17 +69,81 @@ pyenv, conda, rbenv, RVM, SDKMAN!, rustup, and others.`,
 }
 
 func runDetect(cmd *cobra.Command, args []string) error {
+	detector.SetDiagnostics(verbose, os.Stderr)
+	defer detector.SetDiagnostics(false, nil)
 	if len(args) == 0 {
 		return cmd.Help()
 	}
 
-	name := args[0]
 	f := parseFormat(format)
+
+	// Multiple executables
+	if len(args) > 1 {
+		// results is indexed by argument position so output order always
+		// matches input order, regardless of which args hit the cache.
+		results := make([]*detector.Result, len(args))
+		missIdx := make([]int, 0, len(args))
+		missPaths := make([]detector.ResolvedPath, 0, len(args))
+
+		for i, name := range args {
+			rp, err := detector.ResolveExecPath(name)
+			if err != nil {
+				// Skip not found executables silently in batch mode.
+				continue
+			}
+
+			if !noCache {
+				if cached, found := cache.Get(rp.Real); found {
+					copy := *cached
+					copy.Executable = name
+					results[i] = &copy
+					continue
+				}
+			}
+			missIdx = append(missIdx, i)
+			missPaths = append(missPaths, rp)
+		}
+
+		// Batch-detect the cache misses, then place them back in position.
+		if len(missIdx) > 0 {
+			missNames := make([]string, len(missIdx))
+			for n, i := range missIdx {
+				missNames[n] = args[i]
+			}
+
+			for n, r := range detector.DetectBatch(missPaths, missNames) {
+				if !noCache {
+					cache.Set(missPaths[n].Real, r)
+				}
+				results[missIdx[n]] = r
+			}
+		}
+
+		// Drop nil slots (unresolved executables).
+		found := make([]*detector.Result, 0, len(results))
+		for _, r := range results {
+			if r != nil {
+				found = append(found, r)
+			}
+		}
+		results = found
+
+		if len(results) == 0 {
+			fmt.Println("No executables found.")
+			return fmt.Errorf("none of the specified executables were found")
+		}
+
+		output.PrintResults(results, f)
+		return nil
+	}
+
+	// Single executable (original logic)
+	name := args[0]
 
 	rp, err := detector.ResolveExecPath(name)
 	if err != nil {
 		output.PrintNotFound(name, f)
-		return nil
+		return err
 	}
 
 	// Cache by real path
@@ -111,7 +188,7 @@ func runExplain(cmd *cobra.Command, args []string) error {
 	rp, err := detector.ResolveExecPath(name)
 	if err != nil {
 		fmt.Printf("%s %s not found in PATH\n", crossMark, name)
-		return nil
+		return err
 	}
 
 	f := parseFormat(format)
@@ -194,7 +271,7 @@ func buildExplain(name string, rp detector.ResolvedPath, r *detector.Result) str
 func newAllCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "all",
-		Short: "List all detectable executables and their package managers",
+		Short: "Scan common Linux executables and list their package managers",
 		Args:  cobra.NoArgs,
 		RunE:  runAll,
 	}
@@ -211,12 +288,30 @@ func runAll(cmd *cobra.Command, args []string) error {
 	}
 
 	var results []*detector.Result
+	var misses []detector.ResolvedPath
+	var missNames []string
 	for _, bin := range commonBins {
 		rp, err := detector.ResolveExecPath(bin)
 		if err != nil {
 			continue
 		}
-		r := detector.DetectWithRuntime(rp, bin)
+		// Honor --no-cache for the bulk scan.
+		if !noCache {
+			if cached, found := cache.Get(rp.Real); found {
+				copy := *cached
+				copy.Executable = bin
+				results = append(results, &copy)
+				continue
+			}
+		}
+		misses = append(misses, rp)
+		missNames = append(missNames, bin)
+	}
+
+	for i, r := range detector.DetectBatch(misses, missNames) {
+		if !noCache {
+			cache.Set(misses[i].Real, r)
+		}
 		results = append(results, r)
 	}
 
@@ -257,29 +352,29 @@ func newCacheCmd() *cobra.Command {
 	return cmd
 }
 
+var appVersion = "dev"
+
+// SetVersion is called from main() with the value injected at build time via
+// -ldflags "-X main.version=...". Falls back to "dev" for local builds.
+func SetVersion(v string) {
+	if v != "" {
+		appVersion = v
+	}
+}
+
 func newVersionCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
 		Short: "Print version information",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println("spkg v1.1.0")
+			fmt.Printf("spkg %s\n", appVersion)
 		},
 	}
 }
 
 func parseFormat(f string) output.Format {
-	switch strings.ToLower(f) {
-	case "json":
-		return output.FormatJSON
-	case "yaml":
-		return output.FormatYAML
-	case "table":
-		return output.FormatTable
-	case "plain":
-		return output.FormatPlain
-	default:
-		return output.FormatPretty
-	}
+	parsed, _ := output.ParseFormat(f)
+	return parsed
 }
 
 var crossMark = "✗"

@@ -74,3 +74,10 @@ func extractFlatpakVersion(info string) string {
 	}
 	return ""
 }
+
+func (d *FlatpakDetector) Score(execPath string) (Confidence, []Reason) {
+	if strings.HasPrefix(execPath, "/var/lib/flatpak/") || strings.HasPrefix(execPath, filepath.Join(HomeDir(), ".local", "share", "flatpak")) {
+		return ConfidenceMedium, []Reason{{Signal: "path_match", Detail: "path is under a flatpak installation root", Weight: int(ConfidenceMedium)}}
+	}
+	return ConfidenceUnknown, nil
+}

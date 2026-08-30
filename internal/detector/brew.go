@@ -73,3 +73,14 @@ func extractBrewVersion(info string) string {
 	}
 	return strings.Trim(parts[1], " \",")
 }
+
+func (d *BrewDetector) Score(execPath string) (Confidence, []Reason) {
+	home := HomeDir()
+	prefixes := []string{"/usr/local", "/opt/homebrew", filepath.Join(home, "homebrew")}
+	for _, p := range prefixes {
+		if strings.HasPrefix(execPath, filepath.Join(p, "bin")) || strings.HasPrefix(execPath, filepath.Join(p, "Cellar")) || strings.HasPrefix(execPath, filepath.Join(p, "opt")) {
+			return ConfidenceMedium, []Reason{{Signal: "path_match", Detail: "path is under a homebrew prefix", Weight: int(ConfidenceMedium)}}
+		}
+	}
+	return ConfidenceUnknown, nil
+}

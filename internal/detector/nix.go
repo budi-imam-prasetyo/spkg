@@ -54,3 +54,10 @@ func (d *NixDetector) Detect(execPath string) *Result {
 
 	return nil
 }
+
+func (d *NixDetector) Score(execPath string) (Confidence, []Reason) {
+	if strings.HasPrefix(execPath, "/nix/store/") || strings.HasPrefix(execPath, "/run/current-system/sw/bin") || strings.HasPrefix(execPath, filepath.Join(HomeDir(), ".nix-profile")) {
+		return ConfidenceMedium, []Reason{{Signal: "path_match", Detail: "path is under a nix store/profile", Weight: int(ConfidenceMedium)}}
+	}
+	return ConfidenceUnknown, nil
+}

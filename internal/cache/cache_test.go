@@ -11,10 +11,10 @@ func TestCacheOperations(t *testing.T) {
 	Init(time.Minute, time.Minute)
 
 	r := &detector.Result{
-		Found:     true,
-		Manager:   detector.ManagerPacman,
-		Package:   "test-pkg",
-		Version:   "1.0.0",
+		Found:   true,
+		Manager: detector.ManagerPacman,
+		Package: "test-pkg",
+		Version: "1.0.0",
 	}
 
 	Set("test-key", r)

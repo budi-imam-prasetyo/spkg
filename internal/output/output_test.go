@@ -3,6 +3,7 @@ package output
 import (
 	"bytes"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/ryoukaii/spkg/internal/detector"
@@ -74,14 +75,17 @@ func TestPrintResult_Table(t *testing.T) {
 		Manager:        detector.ManagerPacman,
 		Package:        "test-pkg",
 		Version:        "1.0.0",
+		Confidence:     90,
 	}
 
 	output := captureStdout(t, func() {
 		PrintResult(r, FormatTable, false)
 	})
 
-	if output == "" {
-		t.Error("expected non-empty output")
+	for _, want := range []string{"╭", "┬", "╮", "│", "├", "┼", "┤", "╰", "┴", "╯", "Field", "Value", "Executable", "/usr/bin/test", "Manager", "pacman", "Package", "test-pkg"} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("bordered two-column table missing %q:\n%s", want, output)
+		}
 	}
 }
 
@@ -150,8 +154,13 @@ func TestPrintResults(t *testing.T) {
 		PrintResults(results, FormatTable)
 	})
 
-	if output == "" {
-		t.Error("expected non-empty output")
+	for _, want := range []string{"Executable", "Source", "git", "pacman", "node", "npm", "╭", "┬", "╮", "│", "╰", "┴", "╯"} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("bordered two-column list missing %q:\n%s", want, output)
+		}
+	}
+	if strings.Contains(output, "Runtime") {
+		t.Fatalf("expected exactly two list columns, got Runtime column:\n%s", output)
 	}
 }
 

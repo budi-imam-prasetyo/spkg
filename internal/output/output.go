@@ -3,11 +3,11 @@ package output
 import (
 	"encoding/json"
 	"fmt"
-	"os"
+	"path/filepath"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/lipgloss/table"
 	"github.com/ryoukaii/spkg/internal/detector"
 	"gopkg.in/yaml.v3"
 )
@@ -15,8 +15,7 @@ import (
 var (
 	checkMark    = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true).Render("✓")
 	crossMark    = lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Bold(true).Render("✗")
-	labelStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Bold(true)
-	titleStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("12")).Bold(true)
+	labelStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("12")).Bold(true)
 	runtimeLabel = lipgloss.NewStyle().Foreground(lipgloss.Color("13")).Bold(true)
 )
 
@@ -29,6 +28,53 @@ const (
 	FormatTable  Format = "table"
 	FormatPlain  Format = "plain"
 )
+
+func ParseFormat(value string) (Format, bool) {
+	switch strings.ToLower(value) {
+	case "table":
+		return FormatTable, true
+	case "json":
+		return FormatJSON, true
+	case "yaml":
+		return FormatYAML, true
+	case "plain":
+		return FormatPlain, true
+	case "pretty":
+		return FormatPretty, true
+	default:
+		return FormatTable, false
+	}
+}
+
+// printConfidence renders the confidence score, its band label, and the
+// contributing reasons. Low/unknown scores are surfaced with a hint so users
+// know the result is a best guess.
+func printConfidence(r *detector.Result) {
+	if r.Confidence <= 0 && len(r.Reasons) == 0 {
+		return
+	}
+	band := detector.BandFor(r.Confidence)
+	label := detector.LabelFor(r.Confidence)
+	fmt.Println(labelStyle.Render("Confidence:"))
+	// Color the score by band for quick visual triage.
+	var scoreStyle lipgloss.Style
+	switch band {
+	case detector.LevelCertain, detector.LevelHigh:
+		scoreStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
+	case detector.LevelMedium:
+		scoreStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Bold(true)
+	default:
+		scoreStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Bold(true)
+	}
+	fmt.Printf("  %s (%s)\n", scoreStyle.Render(fmt.Sprintf("%d%%", r.Confidence)), label)
+	if len(r.Reasons) > 0 {
+		fmt.Println(labelStyle.Render("Reasons:"))
+		for _, reason := range r.Reasons {
+			fmt.Printf("  • %s\n", reason)
+		}
+	}
+	fmt.Println()
+}
 
 func PrintResult(r *detector.Result, format Format, verbose bool) {
 	switch format {
@@ -66,9 +112,9 @@ func PrintNotFound(name string, format Format) {
 	switch format {
 	case FormatJSON:
 		r := map[string]interface{}{
-			"found":  false,
-			"query":  name,
-			"error":  "executable not found",
+			"found": false,
+			"query": name,
+			"error": "executable not found",
 		}
 		out, _ := json.MarshalIndent(r, "", "  ")
 		fmt.Println(string(out))
@@ -81,17 +127,17 @@ func PrintNotFound(name string, format Format) {
 		out, _ := yaml.Marshal(r)
 		fmt.Print(string(out))
 	default:
-		fmt.Printf("%s %s\n", crossMark, name+" command tidak ditemukan")
+		fmt.Printf("%s %s\n", crossMark, name+" command not found")
 	}
 }
 
 func printPretty(r *detector.Result) {
 	if !r.Found {
-		fmt.Printf("%s %s\n", crossMark, "executable tidak ditemukan")
+		fmt.Printf("%s %s\n", crossMark, "executable not found")
 		return
 	}
 
-	fmt.Printf("%s Package ditemukan\n\n", checkMark)
+	fmt.Printf("%s Package detected\n\n", checkMark)
 
 	// Executable
 	fmt.Println(labelStyle.Render("Executable:"))
@@ -149,10 +195,7 @@ func printPretty(r *detector.Result) {
 	}
 
 	// Confidence
-	if r.Confidence > 0 {
-		fmt.Println(labelStyle.Render("Confidence:"))
-		fmt.Printf("  %d%%\n\n", r.Confidence)
-	}
+	printConfidence(r)
 
 	// Commands
 	fmt.Println(labelStyle.Render("Install command:"))
@@ -171,61 +214,73 @@ func printPretty(r *detector.Result) {
 	}
 }
 
-func twf(w *tabwriter.Writer, format string, a ...any) {
-	_, _ = fmt.Fprintf(w, format, a...)
+func borderedTable(headers []string, rows [][]string, styleFunc table.StyleFunc) string {
+	border := lipgloss.RoundedBorder()
+	// Rounded outside corners with clear intersections inside the grid.
+	border.MiddleLeft = "├"
+	border.MiddleRight = "┤"
+	border.Middle = "┼"
+	border.MiddleTop = "┬"
+	border.MiddleBottom = "┴"
+
+	return table.New().
+		Border(border).
+		BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("8"))).
+		BorderRow(false).
+		BorderColumn(true).
+		BorderHeader(true).
+		Headers(headers...).
+		Rows(rows...).
+		StyleFunc(styleFunc).
+		String()
 }
 
 func printTableResult(r *detector.Result) {
 	if !r.Found {
-		fmt.Printf("%s\n", crossMark+" executable tidak ditemukan")
+		fmt.Printf("%s\n", crossMark+" executable not found")
 		return
 	}
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	twf(w, "%s\n", checkMark+" Package ditemukan\n")
-	twf(w, "\n")
-	twf(w, "%s\t%s\n", labelStyle.Render("Executable:"), r.ExecutablePath)
-	twf(w, "%s\t%s\n", labelStyle.Render("Package manager:"), string(r.Manager))
-	if r.Runtime != "" {
-		twf(w, "%s\t%s\n", runtimeLabel.Render("Runtime:"), string(r.Runtime))
-		if r.RuntimeVersion != "" {
-			twf(w, "%s\t%s\n", runtimeLabel.Render("Runtime version:"), r.RuntimeVersion)
-		}
-		if r.RuntimeManager != "" {
-			twf(w, "%s\t%s\n", runtimeLabel.Render("Runtime manager:"), r.RuntimeManager)
+	var rows [][]string
+	row := func(field, value string) {
+		if value != "" {
+			rows = append(rows, []string{field, value})
 		}
 	}
-	if r.Package != "" {
-		twf(w, "%s\t%s\n", labelStyle.Render("Package:"), r.Package)
-	}
-	if r.Repository != "" {
-		twf(w, "%s\t%s\n", labelStyle.Render("Repository:"), r.Repository)
-	}
+	row("Executable", r.ExecutablePath)
+	row("Manager", string(r.Manager))
+	row("Runtime", string(r.Runtime))
+	row("Runtime version", r.RuntimeVersion)
+	row("Runtime manager", r.RuntimeManager)
+	row("Package", r.Package)
+	row("Repository", r.Repository)
 	if r.IsAUR {
-		twf(w, "%s\tyes\n", labelStyle.Render("AUR:"))
+		row("AUR", "yes")
 	}
-	if r.Version != "" {
-		twf(w, "%s\t%s\n", labelStyle.Render("Version:"), r.Version)
-	}
+	row("Version", r.Version)
 	if r.Global != nil && *r.Global {
-		twf(w, "%s\tyes\n", labelStyle.Render("Global:"))
+		row("Global", "yes")
 	}
-	if r.PythonVersion != "" {
-		twf(w, "%s\t%s\n", labelStyle.Render("Python:"), r.PythonVersion)
+	row("Python", r.PythonVersion)
+	row("Virtual env", r.VirtualEnv)
+	row("Remote", r.Remote)
+	if r.Confidence > 0 || len(r.Reasons) > 0 {
+		row("Confidence", fmt.Sprintf("%d%% (%s)", r.Confidence, detector.LabelFor(r.Confidence)))
+		row("Reasons", strings.Join(r.Reasons, "; "))
 	}
-	if r.VirtualEnv != "" {
-		twf(w, "%s\t%s\n", labelStyle.Render("Virtual env:"), r.VirtualEnv)
-	}
-	if r.Remote != "" {
-		twf(w, "%s\t%s\n", labelStyle.Render("Remote:"), r.Remote)
-	}
-	if r.Confidence > 0 {
-		twf(w, "%s\t%d%%\n", labelStyle.Render("Confidence:"), r.Confidence)
-	}
-	twf(w, "\n")
-	twf(w, "%s\t%s\n", labelStyle.Render("Install:"), r.InstallCmd)
-	twf(w, "%s\t%s\n", labelStyle.Render("Upgrade:"), r.UpgradeCmd)
-	twf(w, "%s\t%s\n", labelStyle.Render("Remove:"), r.RemoveCmd)
-	_ = w.Flush()
+	row("Install", r.InstallCmd)
+	row("Upgrade", r.UpgradeCmd)
+	row("Remove", r.RemoveCmd)
+
+	fmt.Println(borderedTable([]string{"Field", "Value"}, rows, func(row, col int) lipgloss.Style {
+		style := lipgloss.NewStyle().Padding(0, 1)
+		if row == table.HeaderRow {
+			return style.Foreground(lipgloss.Color("15")).Bold(true).Align(lipgloss.Center)
+		}
+		if col == 0 {
+			return style.Foreground(lipgloss.Color("12")).Bold(true)
+		}
+		return style
+	}))
 }
 
 func printPlainResult(r *detector.Result) {
@@ -253,8 +308,11 @@ func printPlainResult(r *detector.Result) {
 	if r.Repository != "" {
 		fmt.Printf("repository: %s\n", r.Repository)
 	}
-	if r.Confidence > 0 {
-		fmt.Printf("confidence: %d%%\n", r.Confidence)
+	if r.Confidence > 0 || len(r.Reasons) > 0 {
+		fmt.Printf("confidence: %d%% (%s)\n", r.Confidence, detector.LabelFor(r.Confidence))
+		for _, reason := range r.Reasons {
+			fmt.Printf("reason: %s\n", reason)
+		}
 	}
 }
 
@@ -269,21 +327,20 @@ func printYAML(r *data) {
 }
 
 func printTable(results []*detector.Result) {
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	twf(w, "%s\t%s\t%s\n", titleStyle.Render("Executable"), titleStyle.Render("Manager"), titleStyle.Render("Runtime"))
-	twf(w, "%s\t%s\t%s\n", "────────────", "──────────────", "──────────────")
+	rows := make([][]string, 0, len(results))
 	for _, r := range results {
-		name := r.ExecutablePath
-		if idx := strings.LastIndex(name, "/"); idx != -1 {
-			name = name[idx+1:]
-		}
-		rt := string(r.Runtime)
-		if rt == "" {
-			rt = "-"
-		}
-		twf(w, "%s\t%s\t%s\n", name, string(r.Manager), rt)
+		rows = append(rows, []string{filepath.Base(r.ExecutablePath), string(r.Manager)})
 	}
-	_ = w.Flush()
+	fmt.Println(borderedTable([]string{"Executable", "Source"}, rows, func(row, col int) lipgloss.Style {
+		style := lipgloss.NewStyle().Padding(0, 1)
+		if row == table.HeaderRow {
+			return style.Foreground(lipgloss.Color("15")).Bold(true).Align(lipgloss.Center)
+		}
+		if col == 1 {
+			return style.Foreground(lipgloss.Color("12")).Bold(true)
+		}
+		return style
+	}))
 }
 
 func printPlainTable(results []*detector.Result) {

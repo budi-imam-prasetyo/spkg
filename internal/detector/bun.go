@@ -93,3 +93,12 @@ func detectGlobalPkgFromDir(globalDir, execPath string) string {
 	}
 	return ""
 }
+
+func (d *BunDetector) Score(execPath string) (Confidence, []Reason) {
+	home := HomeDir()
+	bunBin := filepath.Join(home, ".bun", "bin")
+	if strings.HasPrefix(execPath, bunBin) {
+		return ConfidenceMedium, []Reason{{Signal: "path_match", Detail: "path is in bun's bin dir", Weight: int(ConfidenceMedium)}}
+	}
+	return ConfidenceUnknown, nil
+}

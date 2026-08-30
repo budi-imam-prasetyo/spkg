@@ -10,20 +10,9 @@ type ManualDetector struct{}
 
 func (d *ManualDetector) Name() Manager { return ManagerManual }
 
-func (d *ManualDetector) IsAvailable() bool { return true }
-
-func (d *ManualDetector) Detect(execPath string) *Result {
-	return &Result{
-		Found:          true,
-		ExecutablePath: execPath,
-		Manager:        ManagerManual,
-		Package:        "",
-		InstallCmd:     "# Manual installation",
-		UpgradeCmd:     "# Manual upgrade required",
-		RemoveCmd:      buildRemoveCmd(execPath),
-	}
-}
-
+// NewManualResult builds the "manual" fallback result used when no detector
+// claims an executable. (ManualDetector is not registered; it exists only to
+// produce this fallback.)
 func NewManualResult(rp ResolvedPath, name string) *Result {
 	execPath := rp.Real
 	return &Result{
@@ -86,7 +75,7 @@ func buildRemoveCmd(execPath string) string {
 
 	// Check if it's a snap
 	if strings.HasPrefix(execPath, "/snap/") {
-		return "# sudo snap remove <package>"
+		return "# snap remove <package>"
 	}
 
 	// Check if it's an AppImage

@@ -1,253 +1,288 @@
 # spkg
 
-Detect which package manager installed an executable on your system.
+<div align="center">
 
-## Features
+**Kenali siapa yang menginstall executable di sistem Linux Anda.**
 
-- Detects 20+ package managers: pacman, paru, yay, bun, npm, pnpm, yarn, pip, pipx, uv, cargo, go, gem, composer, flatpak, snap, homebrew, nix, docker, podman
-- Beautiful terminal output with lipgloss
-- Multiple output formats: pretty, JSON, YAML, table, plain
-- Verbose mode for debugging detection
-- Explain mode for understanding PATH resolution
-- Caching for fast repeated queries
-- `--all` to list all detectable executables
-- Cross-platform: Linux, macOS, Windows
+[![Go](https://img.shields.io/badge/Go-1.22+-00ADD8?logo=go&logoColor=white)](https://go.dev)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-Linux-4EAA25?logo=linux&logoColor=white)](https://www.linux.org)
 
-## Installation
+</div>
 
-### Binary releases
+<br>
 
-Download from [GitHub Releases](https://github.com/ryoukaii/spkg/releases).
+`spkg` menjawab satu pertanyaan sederhana tapi sering membingungkan:
 
-### Build from source
+> *"Executable ini dipasang oleh apa? pacman? paru? npm? cargo? fnm?"*
+
+Cukup satu perintah, dan `spkg` memberi tahu **siapa pemiliknya**, **versi berapa**,
+**di repository mana**, dan **command apa yang harus dipakai** untuk install, upgrade,
+atau hapus — lengkap dengan skor confidence berbasis bukti.
+
+---
+
+## ✨ Fitur
+
+| | |
+|---|---|
+| 🔍 **23 package manager** | pacman, paru, yay, bun, npm, pnpm, yarn, pip, pipx, uv, cargo, go, gem, composer, flatpak, snap, homebrew, nix, docker, podman, distrobox, toolbox, appimage + manual fallback |
+| ⚡ **Runtime detection** | fnm, nvm, volta, rustup diakui sebagai *owner* utama executable; asdf, mise, pyenv, conda, mamba, pixi, poetry, rbenv, RVM, SDKMAN!, jenv, gvm, goenv, phpenv, kerl dideteksi sebagai runtime dan diatribusikan ke package manager di bawahnya (pip/gem/go) |
+| 🎯 **AUR helper aware** | Mendeteksi apakah paket AUR dipasang via `paru`, `yay`, `pikaur`, atau `pakku` — command install/upgrade otomatis disesuaikan |
+| 📊 **Confidence scoring** | Skor 0–100 berbasis bukti (path domain, konfirmasi DB, runtime ownership, exclusion bonus) + alasan eksplisit, bukan angka misterius |
+| 🖼️ **Output berborder** | Tabel ASCII dengan rounded corners, header berwarna, dan padding rapi |
+| 📦 **Batch mode** | `spkg ls cat grep` — cek banyak executable sekaligus dalam satu perintah |
+| 💾 **Cache persisten** | Gob serialization ke disk — query ulang <1ms, cold scan ~20s |
+| 🧵 **Timeout & safety** | Setiap subprocess dibatasi 15 detik; tidak ada command injection |
+| 🧪 **Testable engine** | Interface `System` yang bisa di-mock untuk test deterministik tanpa tooling host |
+
+---
+
+## 🚀 Instalasi
+
+### Dari source (disarankan)
 
 ```bash
 git clone https://github.com/ryoukaii/spkg.git
 cd spkg
-go build -o spkg .
-sudo cp spkg /usr/local/bin/
+make install
 ```
 
-### AUR (Arch Linux)
+### Dari GitHub Releases
 
 ```bash
-paru -S spkg
-# or
-yay -S spkg
+# Linux amd64
+curl -sL https://github.com/ryoukaii/spkg/releases/latest/download/spkg_linux_amd64.tar.gz \
+  | tar xz -C ~/.local/bin spkg
+
+# Linux arm64
+curl -sL https://github.com/ryoukaii/spkg/releases/latest/download/spkg_linux_arm64.tar.gz \
+  | tar xz -C ~/.local/bin spkg
 ```
 
-## Usage
-
-### Basic detection
+### Verifikasi
 
 ```bash
-spkg git
+spkg --version
+# spkg version v0.3.0
 ```
 
-Output:
-```
-✓ Package ditemukan
+---
 
-Executable:
-  /usr/bin/git
+## 📖 Penggunaan
 
-Package manager:
-  pacman
-
-Package:
-  git
-
-Repository:
-  extra
-
-Installed version:
-  2.51.0
-
-Install command:
-  sudo pacman -S git
-
-Upgrade command:
-  sudo pacman -Syu git
-
-Remove command:
-  sudo pacman -Rns git
-```
-
-### Output formats
+### Query satu executable
 
 ```bash
-spkg git --output json
-spkg git --output yaml
-spkg git --output table
-spkg git --output plain
+spkg python3
 ```
 
-### Verbose mode
+```
+╭────────────┬─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│   Field    │                                                        Value                                                        │
+├────────────┼─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Executable │ /bin/python3                                                                                                        │
+│ Manager    │ pacman                                                                                                              │
+│ Package    │ python                                                                                                              │
+│ Version    │ 3.14.6-3                                                                                                            │
+│ Confidence │ 90% (high)                                                                                                          │
+│ Reasons    │ path is under a system install dir (pacman domain); pacman -Qo confirms ownership by package python                  │
+│ Install    │ sudo pacman -S python                                                                                               │
+│ Upgrade    │ sudo pacman -Syu python                                                                                             │
+│ Remove     │ sudo pacman -Rns python                                                                                             │
+╰────────────┴─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+### Query banyak executable sekaligus
 
 ```bash
-spkg git -v
+spkg ls cat grep awk sed
 ```
 
-Shows the detection process:
 ```
-Searching executable "git"...
-Found /usr/bin/git
-Running detectors...
-✓ Package ditemukan
-...
-```
-
-### Explain mode
-
-```bash
-spkg explain git
+╭────────────┬────────╮
+│ Executable │ Source │
+├────────────┼────────┤
+│ ls         │ pacman │
+│ cat        │ pacman │
+│ grep       │ pacman │
+│ awk        │ pacman │
+│ sed        │ pacman │
+╰────────────┴────────╯
 ```
 
-Explains why an executable is in your PATH:
-```
-✓ Package ditemukan
-
-Executable:
-  /usr/bin/git
-
-Package manager:
-  pacman
-
-Package:
-  git
-
-Explanation:
-  git is located at:
-    /usr/bin/git
-
-  That directory is owned by the system.
-  pacman installed this as a system package.
-```
-
-### List all detectable executables
+### Scan executable umum di sistem
 
 ```bash
 spkg all
+spkg all -o json > packages.json
 ```
 
-Output:
-```
-Executable    Manager
-────────────  ──────────────
-git           pacman
-node          bun
-python        pacman
-docker        pacman
-code          pacman
-lazygit       pacman
-```
-
-### Cache management
+### Runtime manager (fnm, nvm, pyenv, dll)
 
 ```bash
-spkg cache stats    # Show cache statistics
-spkg cache clear    # Clear cache
+spkg node
 ```
 
-## Adding a new detector
-
-1. Create `internal/detector/yourmanager.go`:
-
-```go
-package detector
-
-type YourManagerDetector struct{}
-
-func init() { Register(&YourManagerDetector{}) }
-
-func (d *YourManagerDetector) Name() Manager { return ManagerYourManager }
-
-func (d *YourManagerDetector) IsAvailable() bool {
-    return HasCommand("your-manager")
-}
-
-func (d *YourManagerDetector) Detect(execPath string) *Result {
-    // Implement detection logic
-    return &Result{
-        Found:          true,
-        ExecutablePath: execPath,
-        Manager:        ManagerYourManager,
-        Package:        "package-name",
-        Version:        "1.0.0",
-        InstallCmd:     "your-manager install package-name",
-        UpgradeCmd:     "your-manager upgrade package-name",
-        RemoveCmd:      "your-manager remove package-name",
-    }
-}
+```
+╭─────────────────┬─────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│     Field       │                                                        Value                                                        │
+├─────────────────┼─────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Executable      │ /home/ryoukaii/.local/share/fnm/node-versions/v24.20.0/installation/bin/node                                    │
+│ Manager         │ fnm                                                                                                              │
+│ Runtime         │ fnm                                                                                                              │
+│ Runtime version │ Node.js 24.20.0                                                                                                  │
+│ Package         │ node                                                                                                             │
+│ Confidence      │ 80% (medium)                                                                                                     │
+│ Install         │ fnm install 24.20.0                                                                                              │
+│ Upgrade         │ fnm install --latest                                                                                             │
+│ Remove          │ fnm uninstall 24.20.0                                                                                            │
+╰─────────────────┴─────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
-2. Add the manager constant to `internal/detector/detector.go`:
+### Paket AUR via helper
 
-```go
-const (
-    ManagerYourManager Manager = "your-manager"
-)
-```
-
-3. Add priority in `internal/detector/registry.go`:
-
-```go
-func priorityOrder(m Manager) int {
-    // Add your manager's priority
-    ManagerYourManager: 15,
-}
-```
-
-## Supported package managers
-
-| Manager | Detection method |
-|---------|-----------------|
-| pacman | `pacman -Qo` |
-| paru/yay | `pacman -Qm` (AUR check) |
-| bun | `~/.bun/bin` prefix check |
-| npm | `npm prefix -g` + `npm root -g` |
-| pnpm | `pnpm prefix -g` |
-| yarn | `yarn global dir` |
-| pip | `pip show` |
-| pipx | `pipx list` |
-| uv | `uv tool list` |
-| cargo | `cargo install --list` |
-| go | `go env GOPATH` |
-| gem | `gem list -d` |
-| composer | `composer global config home` |
-| flatpak | `flatpak list --app` |
-| snap | `snap list` |
-| homebrew | `brew --prefix` |
-| nix | `nix profile list` |
-| docker | `docker images` |
-| podman | `podman images` |
-| appimage | `.AppImage` suffix check |
-| manual | Fallback (no package manager found) |
-
-## Troubleshooting
-
-### "command not found"
-
-The executable is not in your PATH. Check with `which <command>`.
-
-### Wrong package manager detected
-
-Some executables may be installed by multiple package managers. The detector uses a priority system:
-
-1. System package managers (pacman, apt, dnf)
-2. Application stores (flatpak, snap)
-3. Language-specific managers (npm, pip, cargo)
-4. Manual installation (fallback)
-
-### Slow detection
-
-First run may be slow due to package manager queries. Subsequent runs use cache (default TTL: 10 minutes).
-
-Clear cache with:
 ```bash
-spkg cache clear
+spkg code
 ```
 
-## License
+```
+╭────────────┬──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│   Field    │                                                        Value                                                        │
+├────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Executable │ /bin/code                                                                                                           │
+│ Manager    │ pacman                                                                                                              │
+│ Package    │ visual-studio-code-bin                                                                                              │
+│ Repository │ aur                                                                                                                 │
+│ AUR        │ yes                                                                                                                 │
+│ Version    │ 1.134.0-1                                                                                                           │
+│ Install    │ paru -S visual-studio-code-bin                                                                                      │
+│ Upgrade    │ paru -Syu visual-studio-code-bin                                                                                    │
+│ Remove     │ paru -Rns visual-studio-code-bin                                                                                    │
+╰────────────┴──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
 
-MIT
+Perhatikan: `spkg` tahu VS Code dipasang via **`paru`**, bukan `pacman` langsung —
+jadi command-nya sudah benar.
+
+---
+
+## 🎛️ Opsi
+
+```
+spkg [executable...] [flags]
+
+Flags:
+  -o, --output string   Output format: table, json, yaml, plain, pretty (default "table")
+  -v, --verbose         Show verbose detection output
+      --no-cache        Skip cache
+      --cache-ttl int   Cache TTL in seconds (default: 600)
+  -h, --help            Help for spkg
+      --version         Version for spkg
+```
+
+### Subcommand
+
+| Command | Deskripsi |
+|---------|-----------|
+| `spkg all` | Scan executable umum di sistem |
+| `spkg cache stats` | Lihat jumlah item cache |
+| `spkg cache clear` | Bersihkan cache |
+| `spkg cache items` | Tampilkan isi cache |
+
+---
+
+## 🧠 Bagaimana Confidence Scoring Bekerja
+
+`spkg` tidak menebak. Setiap skor 0–100 dibangun dari bukti berlapis:
+
+| Level | Skor | Artinya |
+|-------|------|---------|
+| `unknown` | 0 | Tidak ada bukti — fallback manual |
+| `low` | 40 | Indikasi lemah (prefix path ambigu) |
+| `medium` | 70 | Bukti struktural kuat (path di domain manager) |
+| `high` | 90 | Konfirmasi command-level (`pacman -Qo`) |
+| `certain` | 100 | Ownership DB-backed |
+
+Komponen yang dikombinasikan oleh `CombineConfidence`:
+
+1. **Structural band** — sinyal dari `Score()` tanpa subprocess
+2. **Command confirmation** — menaikkan ke `high` jika DB konfirmasi
+3. **Runtime ownership** — runtime manager meng-own path tersebut
+4. **Exclusion bonus** — semakin sedikit manager lain yang match, semakin yakin (maksimal +10)
+
+Setiap alasan dicetak eksplisit di field `Reasons`, jadi Anda selalu tahu **mengapa**
+`spkg` menyimpulkan sesuatu.
+
+---
+
+## 🏗️ Arsitektur Engine
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        CLI (cobra)                           │
+│   runDetect → single | batch → output (table/json/yaml)     │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+┌──────────────────────────▼──────────────────────────────────┐
+│                   Registry (registry.go)                     │
+│   DetectWithRuntime: priority order + runtime overlay       │
+│   DetectBatch: bounded worker pool (max 8)                  │
+└──────┬───────────────────────────────────────────┬──────────┘
+       │                                           │
+┌──────▼──────────────┐                  ┌─────────▼──────────┐
+│  Detector interface │                  │ RuntimeDetector    │
+│  • Name()           │                  │ • Name()           │
+│  • Detect(path)     │                  │ • Detect(path)     │
+│  • IsAvailable()    │                  │ • IsAvailable()    │
+│  • Score(path)      │                  └────────────────────┘
+└──────┬──────────────┘
+       │
+┌──────▼──────────────────────────────────────────────────────┐
+│                Confidence Engine (confidence.go)              │
+│   CombineConfidence → structural + confirm + runtime + bonus │
+└──────┬──────────────────────────────────────────────────────┘
+       │
+┌──────▼──────────────────────────────────────────────────────┐
+│              System interface (mockable)                     │
+│   LookPath() • CmdContext()  ← RWMutex-guarded              │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**Keputusan desain penting:**
+
+- **`Detect()` vs `Score()`** — pemisahan operasi mahal (subprocess) dari sinyal murah (string match), sehingga `Score()` bisa dijalankan paralel tanpa side effect.
+- **Priority order eksplisit** — `pacman(1) < paru(2) < fnm(8) < npm(11) < manual(99)`. Bukan urutan registrasi, tapi urutan bisnis.
+- **Runtime menang jika meng-own path** — `node` di bawah `~/.local/share/fnm/` dimiliki `fnm`, bukan `npm`, meskipun `npm` juga ada di sana.
+- **System interface di-mock** — `SetSystem(fake)` memungkinkan test deterministik tanpa tooling host, dan dilindungi `RWMutex` untuk aman concurrent.
+
+---
+
+## 🧪 Development
+
+```bash
+make test      # go test -v -race -coverprofile
+make lint      # golangci-lint run ./...
+make build     # go build dengan ldflags version
+make clean     # hapus artefak
+```
+
+Menambah detector baru hanya butuh satu file:
+
+```go
+// internal/detector/mytool.go
+type MyToolDetector struct{}
+
+func (d *MyToolDetector) Name() Manager { return ManagerMyTool }
+func (d *MyToolDetector) Detect(execPath string) *Result { /* ... */ }
+func (d *MyToolDetector) IsAvailable() bool { return HasCommand("mytool") }
+func (d *MyToolDetector) Score(execPath string) (Confidence, []Reason) { /* ... */ }
+
+func init() { Register(&MyToolDetector{}) }
+```
+
+---
+
+## 📄 Lisensi
+
+MIT — lihat [LICENSE](LICENSE).

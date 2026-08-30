@@ -25,9 +25,9 @@ func (d *GemDetector) Detect(execPath string) *Result {
 			ExecutablePath: execPath,
 			Manager:        ManagerGem,
 			Package:        "ruby",
-			InstallCmd:     "sudo pacman -S ruby  # or: sudo apt install ruby",
-			UpgradeCmd:     "sudo pacman -Syu ruby",
-			RemoveCmd:      "sudo pacman -Rns ruby  # or: sudo apt remove ruby",
+			InstallCmd:     "gem update --system",
+			UpgradeCmd:     "gem update --system",
+			RemoveCmd:      "# RubyGems is normally installed with Ruby",
 		}
 	}
 
@@ -52,7 +52,11 @@ func (d *GemDetector) Detect(execPath string) *Result {
 			version = strings.Trim(parts[1], "()")
 		}
 		for _, line := range lines[1:] {
-			if strings.Contains(line, execPath) || strings.Contains(line, base) {
+			// Match on the executable name only, not an arbitrary substring of
+			// the path. `gem list -d` prints the install path; matching on that
+			// produced false positives (any gem whose path contained the binary
+			// name was claimed).
+			if strings.Contains(line, "Executables:") && strings.Contains(line, base) {
 				return &Result{
 					Found:          true,
 					ExecutablePath: execPath,
@@ -68,4 +72,13 @@ func (d *GemDetector) Detect(execPath string) *Result {
 	}
 
 	return nil
+}
+
+func (d *GemDetector) Score(execPath string) (Confidence, []Reason) {
+	home := HomeDir()
+	gemDir := filepath.Join(home, ".gem")
+	if strings.HasPrefix(execPath, gemDir) || strings.HasPrefix(execPath, "/usr/lib/ruby/") || strings.Contains(execPath, "gems") {
+		return ConfidenceMedium, []Reason{{Signal: "path_match", Detail: "path is under a ruby gem directory", Weight: int(ConfidenceMedium)}}
+	}
+	return ConfidenceUnknown, nil
 }

@@ -21,3 +21,7 @@ Thumbs.db
 
 # Local
 agent-skills/
+
+*.md
+!README.md
+!CHANGELOG.md
