@@ -185,6 +185,12 @@ func DetectRuntime(execPath ResolvedPath) (RuntimeType, string, string, int) {
 
 func DetectWithRuntime(execPath ResolvedPath, name string) *Result {
 	r := DetectFirst(execPath)
+	// pmDetected: a package-manager Detect() (npm/pnpm/yarn/bun/...) actually
+	// claimed this path. Only detectors in the package-manager registry can
+	// produce a non-nil result here (runtime/version managers live in a
+	// separate registry), so this cleanly distinguishes "a package manager
+	// owns a real package at this path" from the manual fallback.
+	pmDetected := r != nil
 	rt, version, manager, rtConf := DetectRuntime(execPath)
 	runtimeOwns := rt != RuntimeNone
 
@@ -211,7 +217,18 @@ func DetectWithRuntime(execPath ResolvedPath, name string) *Result {
 		r.Runtime = rt
 		r.RuntimeVersion = version
 		r.RuntimeManager = manager
-		applyRuntimeOwner(r, rt, runtimeVersionNumber(version))
+		// EXCEPTION: a runtime manager's dir also contains global packages
+		// installed by a package manager (e.g. `npm install -g 9remote` lands
+		// under an fnm-managed node's lib/node_modules). The runtime is only
+		// the authority for its OWN bundled tooling (node/npm/npx); a genuine
+		// third-party global package stays owned by the package manager that
+		// installed it, so `spkg 9remote` shows `npm uninstall -g 9remote`
+		// instead of the nonsensical `fnm uninstall 24.20.0` (which would
+		// remove the entire Node.js runtime). Keep the runtime as metadata.
+		pmOwnsRealPackage := pmDetected && !isRuntimeBundledPackage(r.Package)
+		if !pmOwnsRealPackage {
+			applyRuntimeOwner(r, rt, runtimeVersionNumber(version))
+		}
 		// Re-evaluate the structural band for the (possibly new) manager.
 		band, reasons = scoreFor(r.Manager, execPath)
 		// A runtime owning the path is itself strong structural evidence; the
@@ -355,6 +372,27 @@ func applyRuntimeOwner(r *Result, rt RuntimeType, version string) {
 		r.InstallCmd = "# Managed by " + r.RuntimeManager
 		r.UpgradeCmd = "# Upgrade with " + r.RuntimeManager
 		r.RemoveCmd = "# Remove with " + r.RuntimeManager
+	}
+}
+
+// isRuntimeBundledPackage reports whether the package name is part of a runtime
+// manager's own bundled toolchain (the interpreter/runtime itself and the
+// package manager shipped with it), as opposed to a third-party global package
+// a user installed into the runtime's dir. For bundled tooling the runtime
+// manager is the correct owner (e.g. `fnm uninstall <ver>` for node/npm);
+// for a real package it is not.
+func isRuntimeBundledPackage(pkg string) bool {
+	switch pkg {
+	case "node", "npm", "npx", "corepack",
+		"rust", "rustc", "cargo",
+		"python", "python3", "pip", "pip3",
+		"ruby", "gem",
+		"go", "gofmt",
+		"php",
+		"bun":
+		return true
+	default:
+		return false
 	}
 }
 

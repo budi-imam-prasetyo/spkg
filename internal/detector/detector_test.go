@@ -312,6 +312,50 @@ func TestDetectBatchPreservesInputOrder(t *testing.T) {
 	}
 }
 
+func TestPkgFromNodeModulesPath(t *testing.T) {
+	tests := []struct {
+		path string
+		want string
+	}{
+		{
+			path: "/home/u/.local/share/fnm/node-versions/v24.20.0/installation/lib/node_modules/9remote/dist/cli.cjs",
+			want: "9remote",
+		},
+		{
+			path: "/usr/lib/node_modules/@scope/pkg/bin/x.js",
+			want: "@scope/pkg",
+		},
+		{
+			path: "/usr/lib/node_modules/eslint/bin/eslint.js",
+			want: "eslint",
+		},
+		{
+			path: "/home/u/.cargo/bin/rg",
+			want: "",
+		},
+	}
+	for _, tt := range tests {
+		if got := pkgFromNodeModulesPath(tt.path); got != tt.want {
+			t.Errorf("pkgFromNodeModulesPath(%q) = %q, want %q", tt.path, got, tt.want)
+		}
+	}
+}
+
+func TestIsRuntimeBundledPackage(t *testing.T) {
+	bundled := []string{"node", "npm", "npx", "corepack", "rust", "cargo", "python", "pip", "ruby", "gem", "go", "bun"}
+	for _, p := range bundled {
+		if !isRuntimeBundledPackage(p) {
+			t.Errorf("isRuntimeBundledPackage(%q) = false, want true", p)
+		}
+	}
+	notBundled := []string{"9remote", "eslint", "typescript", "@scope/pkg", "prettier"}
+	for _, p := range notBundled {
+		if isRuntimeBundledPackage(p) {
+			t.Errorf("isRuntimeBundledPackage(%q) = true, want false", p)
+		}
+	}
+}
+
 func BenchmarkDetectFirst(b *testing.B) {
 	rp := ResolvedPath{Original: "/usr/bin/ls", Real: "/usr/bin/ls"}
 	for i := 0; i < b.N; i++ {

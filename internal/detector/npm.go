@@ -51,6 +51,13 @@ func (d *NpmDetector) Detect(execPath string) *Result {
 
 	globalList, _ := RunCmd("npm", "list", "-g", "--depth=0", "--json")
 	pkgName := extractNpmPkgName(globalList, base)
+	// The resolved path may point at the real script inside the package
+	// (e.g. .../node_modules/9remote/dist/cli.cjs), so `base` is a filename
+	// like "cli.cjs", not the package name. Recover the real package name
+	// from the node_modules path segment when possible.
+	if fromPath := pkgFromNodeModulesPath(execPath); fromPath != "" {
+		pkgName = fromPath
+	}
 	if pkgName == "" {
 		pkgName = base
 	}
@@ -86,4 +93,34 @@ func (d *NpmDetector) Score(execPath string) (Confidence, []Reason) {
 		return ConfidenceMedium, []Reason{{Signal: "path_match", Detail: "path is under a node_modules or node runtime dir", Weight: int(ConfidenceMedium)}}
 	}
 	return ConfidenceUnknown, nil
+}
+
+// pkgFromNodeModulesPath extracts the package name from a path that contains a
+// node_modules segment, handling scoped packages. It returns the directory name
+// immediately after the LAST "node_modules" component:
+//
+//	.../lib/node_modules/9remote/dist/cli.cjs  -> "9remote"
+//	.../node_modules/@scope/pkg/bin/x.js       -> "@scope/pkg"
+//
+// Returns "" when the path has no node_modules segment.
+func pkgFromNodeModulesPath(execPath string) string {
+	parts := strings.Split(filepath.ToSlash(execPath), "/")
+	idx := -1
+	for i, p := range parts {
+		if p == "node_modules" {
+			idx = i
+		}
+	}
+	if idx == -1 || idx+1 >= len(parts) {
+		return ""
+	}
+	name := parts[idx+1]
+	if name == "" {
+		return ""
+	}
+	// Scoped package: @scope/pkg
+	if strings.HasPrefix(name, "@") && idx+2 < len(parts) && parts[idx+2] != "" {
+		return name + "/" + parts[idx+2]
+	}
+	return name
 }
