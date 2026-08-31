@@ -1,5 +1,5 @@
 BINARY_NAME=spkg
-VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "v0.1.0")
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null | sed -E 's/-[0-9]+-g[0-9a-f]+(-dirty)?//; s/-dirty$$//' || echo "v0.1.0")
 LDFLAGS=-ldflags "-s -w -X main.version=$(VERSION)"
 
 .PHONY: build test lint clean install
