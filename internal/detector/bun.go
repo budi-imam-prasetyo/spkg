@@ -41,7 +41,7 @@ func (d *BunDetector) Detect(execPath string) *Result {
 	}
 
 	globalDir := filepath.Join(home, ".bun", "install", "global", "node_modules")
-	_, err := RunCmd("bun", "pm", "ls", "--global")
+	_, err := bunGlobalList()
 	if err != nil {
 		return &Result{
 			Found:          true,
@@ -69,6 +69,11 @@ func (d *BunDetector) Detect(execPath string) *Result {
 		InstallCmd:     "bun add -g " + pkgName,
 		UpgradeCmd:     "bun update -g " + pkgName,
 		RemoveCmd:      "bun remove -g " + pkgName,
+		ConfirmReasons: []Reason{{
+			Signal: "manager_db",
+			Detail: "bun global dir owns this path",
+			Weight: int(ConfidenceHigh),
+		}},
 	}
 }
 

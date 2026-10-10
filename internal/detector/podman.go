@@ -22,22 +22,40 @@ func (d *PodmanDetector) Detect(execPath string) *Result {
 		return nil
 	}
 
-	images, err := RunCmd("podman", "images", "--format", "{{.Repository}}:{{.Tag}}")
+	images, err := memoizedRunCmd("podman", "images", "--format", "{{.Repository}}:{{.Tag}}")
 	if err != nil {
 		return nil
 	}
 
+	base := filepath.Base(execPath)
 	for _, line := range strings.Split(images, "\n") {
-		if strings.Contains(line, execPath) {
-			return &Result{
-				Found:          true,
-				ExecutablePath: execPath,
-				Manager:        ManagerPodman,
-				Package:        line,
-				InstallCmd:     "podman pull " + line,
-				UpgradeCmd:     "podman pull " + line,
-				RemoveCmd:      "podman rmi " + line,
-			}
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		repo := line
+		if idx := strings.LastIndex(repo, ":"); idx != -1 {
+			repo = repo[:idx]
+		}
+		if idx := strings.LastIndex(repo, "/"); idx != -1 {
+			repo = repo[idx+1:]
+		}
+		if repo != base && !strings.Contains(line, execPath) {
+			continue
+		}
+		return &Result{
+			Found:          true,
+			ExecutablePath: execPath,
+			Manager:        ManagerPodman,
+			Package:        line,
+			InstallCmd:     "podman pull " + line,
+			UpgradeCmd:     "podman pull " + line,
+			RemoveCmd:      "podman rmi " + line,
+			ConfirmReasons: []Reason{{
+				Signal: "manager_db",
+				Detail: "podman images confirms repository " + line,
+				Weight: int(ConfidenceHigh),
+			}},
 		}
 	}
 

@@ -17,7 +17,7 @@ func (d *SnapDetector) IsAvailable() bool {
 }
 
 func (d *SnapDetector) Detect(execPath string) *Result {
-	list, err := RunCmd("snap", "list")
+	list, err := snapList()
 	if err != nil {
 		return nil
 	}
@@ -36,7 +36,10 @@ func (d *SnapDetector) Detect(execPath string) *Result {
 			version = parts[1]
 		}
 
-		info, _ := RunCmd("snap", "info", name)
+		info := snapInfo(name)
+		if info == "" {
+			continue
+		}
 		if strings.Contains(info, execPath) || strings.Contains(info, "/snap/"+name) {
 			return &Result{
 				Found:          true,
@@ -47,6 +50,11 @@ func (d *SnapDetector) Detect(execPath string) *Result {
 				InstallCmd:     "snap install " + name,
 				UpgradeCmd:     "snap refresh " + name,
 				RemoveCmd:      "snap remove " + name,
+				ConfirmReasons: []Reason{{
+					Signal: "manager_db",
+					Detail: "snap info confirms package " + name,
+					Weight: int(ConfidenceHigh),
+				}},
 			}
 		}
 	}

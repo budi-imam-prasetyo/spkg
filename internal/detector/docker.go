@@ -24,23 +24,42 @@ func (d *DockerDetector) Detect(execPath string) *Result {
 		return nil
 	}
 
-	images, err := RunCmd("docker", "images", "--format", "{{.Repository}}:{{.Tag}}")
+	images, err := memoizedRunCmd("docker", "images", "--format", "{{.Repository}}:{{.Tag}}")
 	if err != nil {
 		return nil
 	}
 
 	base := filepath.Base(execPath)
 	for _, line := range strings.Split(images, "\n") {
-		if strings.Contains(line, base) {
-			return &Result{
-				Found:          true,
-				ExecutablePath: execPath,
-				Manager:        ManagerDocker,
-				Package:        line,
-				InstallCmd:     "docker pull " + line,
-				UpgradeCmd:     "docker pull " + line,
-				RemoveCmd:      "docker rmi " + line,
-			}
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		// Exact match on repository name (before :tag, after last /):
+		// "myapp" must not match "myapp-helper".
+		repo := line
+		if idx := strings.LastIndex(repo, ":"); idx != -1 {
+			repo = repo[:idx]
+		}
+		if idx := strings.LastIndex(repo, "/"); idx != -1 {
+			repo = repo[idx+1:]
+		}
+		if repo != base {
+			continue
+		}
+		return &Result{
+			Found:          true,
+			ExecutablePath: execPath,
+			Manager:        ManagerDocker,
+			Package:        line,
+			InstallCmd:     "docker pull " + line,
+			UpgradeCmd:     "docker pull " + line,
+			RemoveCmd:      "docker rmi " + line,
+			ConfirmReasons: []Reason{{
+				Signal: "manager_db",
+				Detail: "docker images confirms repository " + line,
+				Weight: int(ConfidenceHigh),
+			}},
 		}
 	}
 

@@ -79,6 +79,11 @@ func (d *PipDetector) Detect(execPath string) *Result {
 		InstallCmd:     pipCmd + " install " + name,
 		UpgradeCmd:     pipCmd + " install --upgrade " + name,
 		RemoveCmd:      pipCmd + " uninstall " + name,
+		ConfirmReasons: []Reason{{
+			Signal: "manager_db",
+			Detail: "pip show confirms package " + name,
+			Weight: int(ConfidenceHigh),
+		}},
 	}
 }
 

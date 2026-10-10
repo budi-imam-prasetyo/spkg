@@ -31,7 +31,7 @@ func (d *GemDetector) Detect(execPath string) *Result {
 		}
 	}
 
-	list, err := RunCmd("gem", "list", "-d")
+	list, err := gemListDetail()
 	if err != nil {
 		return nil
 	}
@@ -52,11 +52,10 @@ func (d *GemDetector) Detect(execPath string) *Result {
 			version = strings.Trim(parts[1], "()")
 		}
 		for _, line := range lines[1:] {
-			// Match on the executable name only, not an arbitrary substring of
-			// the path. `gem list -d` prints the install path; matching on that
-			// produced false positives (any gem whose path contained the binary
-			// name was claimed).
-			if strings.Contains(line, "Executables:") && strings.Contains(line, base) {
+			// Exact match on the Executables list only: split "Executables: a, b"
+			// and compare tokens. Matching arbitrary substrings of the install
+			// path produced false positives.
+			if strings.Contains(line, "Executables:") && matchExecutablesLine(line, base) {
 				return &Result{
 					Found:          true,
 					ExecutablePath: execPath,
@@ -66,6 +65,11 @@ func (d *GemDetector) Detect(execPath string) *Result {
 					InstallCmd:     "gem install " + pkgName,
 					UpgradeCmd:     "gem install " + pkgName,
 					RemoveCmd:      "gem uninstall " + pkgName,
+					ConfirmReasons: []Reason{{
+						Signal: "manager_db",
+						Detail: "gem list confirms executable " + base + " in package " + pkgName,
+						Weight: int(ConfidenceHigh),
+					}},
 				}
 			}
 		}

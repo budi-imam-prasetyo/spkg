@@ -16,7 +16,7 @@ func (d *NixDetector) IsAvailable() bool {
 }
 
 func (d *NixDetector) Detect(execPath string) *Result {
-	list, err := RunCmd("nix", "profile", "list")
+	list, err := memoizedRunCmd("nix", "profile", "list")
 	if err != nil {
 		return nil
 	}
@@ -34,6 +34,11 @@ func (d *NixDetector) Detect(execPath string) *Result {
 					InstallCmd:     "nix profile install nixpkgs#" + pkgName,
 					UpgradeCmd:     "nix profile upgrade " + pkgName,
 					RemoveCmd:      "nix profile remove " + pkgName,
+					ConfirmReasons: []Reason{{
+						Signal: "manager_db",
+						Detail: "nix profile list confirms package " + pkgName,
+						Weight: int(ConfidenceHigh),
+					}},
 				}
 			}
 		}

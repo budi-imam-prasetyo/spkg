@@ -23,7 +23,7 @@ func (d *PipxDetector) Detect(execPath string) *Result {
 		return nil
 	}
 
-	list, err := RunCmd("pipx", "list", "--short")
+	list, err := pipxListShort()
 	if err != nil {
 		return nil
 	}
@@ -52,32 +52,46 @@ func (d *PipxDetector) Detect(execPath string) *Result {
 					InstallCmd:     "pipx install " + pkgName,
 					UpgradeCmd:     "pipx upgrade " + pkgName,
 					RemoveCmd:      "pipx uninstall " + pkgName,
+					ConfirmReasons: []Reason{{
+						Signal: "manager_db",
+						Detail: "pipx venv owns binary " + base,
+						Weight: int(ConfidenceHigh),
+					}},
 				}
 			}
 		}
 	}
 
-	pipxDetect, _ := RunCmd("pipx", "list")
+	pipxDetect, _ := pipxListFull()
 	for _, line := range strings.Split(pipxDetect, "\n") {
-		if strings.Contains(line, base) {
-			parts := strings.Fields(line)
-			if len(parts) > 0 {
-				pkgName := strings.TrimRight(parts[0], ":")
-				venv := filepath.Join(home, ".local", "pipx", "venvs", pkgName)
-				// Only trust this match if the binary actually lives inside a
-				// pipx-managed venv (pipx/uv/brew share ~/.local/bin).
-				if _, err := os.Stat(filepath.Join(venv, "bin", base)); err == nil {
-					return &Result{
-						Found:          true,
-						ExecutablePath: execPath,
-						Manager:        ManagerPipx,
-						Package:        pkgName,
-						VirtualEnv:     venv,
-						InstallCmd:     "pipx install " + pkgName,
-						UpgradeCmd:     "pipx upgrade " + pkgName,
-						RemoveCmd:      "pipx uninstall " + pkgName,
-					}
-				}
+		// Exact token match: the binary name must appear as a whole word,
+		// not as a substring ("black" must not match "blackd").
+		if !containsWord(line, base) {
+			continue
+		}
+		parts := strings.Fields(line)
+		if len(parts) == 0 {
+			continue
+		}
+		pkgName := strings.TrimRight(parts[0], ":")
+		venv := filepath.Join(home, ".local", "pipx", "venvs", pkgName)
+		// Only trust this match if the binary actually lives inside a
+		// pipx-managed venv (pipx/uv/brew share ~/.local/bin).
+		if _, err := os.Stat(filepath.Join(venv, "bin", base)); err == nil {
+			return &Result{
+				Found:          true,
+				ExecutablePath: execPath,
+				Manager:        ManagerPipx,
+				Package:        pkgName,
+				VirtualEnv:     venv,
+				InstallCmd:     "pipx install " + pkgName,
+				UpgradeCmd:     "pipx upgrade " + pkgName,
+				RemoveCmd:      "pipx uninstall " + pkgName,
+				ConfirmReasons: []Reason{{
+					Signal: "manager_db",
+					Detail: "pipx venv owns binary " + base,
+					Weight: int(ConfidenceHigh),
+				}},
 			}
 		}
 	}

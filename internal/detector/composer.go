@@ -16,7 +16,7 @@ func (d *ComposerDetector) IsAvailable() bool {
 }
 
 func (d *ComposerDetector) Detect(execPath string) *Result {
-	globalDir, _ := RunCmd("composer", "global", "config", "home")
+	globalDir := composerGlobalHome()
 	if globalDir == "" {
 		globalDir = filepath.Join(HomeDir(), ".composer")
 	}
@@ -50,6 +50,11 @@ func (d *ComposerDetector) Detect(execPath string) *Result {
 		InstallCmd:     "composer global require " + base,
 		UpgradeCmd:     "composer global update " + base,
 		RemoveCmd:      "composer global remove " + base,
+		ConfirmReasons: []Reason{{
+			Signal: "manager_db",
+			Detail: "composer global vendor bin owns this path",
+			Weight: int(ConfidenceHigh),
+		}},
 	}
 }
 

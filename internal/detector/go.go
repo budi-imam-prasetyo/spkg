@@ -16,7 +16,7 @@ func (d *GoDetector) IsAvailable() bool {
 }
 
 func (d *GoDetector) Detect(execPath string) *Result {
-	gopath, _ := RunCmd("go", "env", "GOPATH")
+	gopath := goGopath()
 	if gopath == "" {
 		gopath = filepath.Join(HomeDir(), "go")
 	}

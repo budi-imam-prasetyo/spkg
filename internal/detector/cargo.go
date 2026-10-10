@@ -38,7 +38,7 @@ func (d *CargoDetector) Detect(execPath string) *Result {
 		}
 	}
 
-	list, err := RunCmd("cargo", "install", "--list")
+	list, err := cargoInstallList()
 	if err != nil {
 		return nil
 	}
@@ -68,6 +68,11 @@ func (d *CargoDetector) Detect(execPath string) *Result {
 						InstallCmd:     "cargo install " + name,
 						UpgradeCmd:     "cargo install " + name,
 						RemoveCmd:      "cargo uninstall " + name,
+						ConfirmReasons: []Reason{{
+							Signal: "manager_db",
+							Detail: "cargo install --list confirms package " + name,
+							Weight: int(ConfidenceHigh),
+						}},
 					}
 				}
 			}

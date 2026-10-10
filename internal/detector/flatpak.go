@@ -30,36 +30,49 @@ type flatpakNotFoundError struct{}
 func (e *flatpakNotFoundError) Error() string { return "flatpak not found" }
 
 func (d *FlatpakDetector) Detect(execPath string) *Result {
-	list, err := RunCmd("flatpak", "list", "--app", "--columns=application,origin,installation")
+	list, err := flatpakAppList()
 	if err != nil {
 		return nil
 	}
 
+	base := filepath.Base(execPath)
 	for _, line := range strings.Split(list, "\n") {
 		parts := strings.Split(line, "\t")
 		if len(parts) < 2 {
 			continue
 		}
-		appID := parts[0]
+		appID := strings.TrimSpace(parts[0])
+		if appID == "" {
+			continue
+		}
 		origin := ""
 		if len(parts) > 1 {
-			origin = parts[1]
+			origin = strings.TrimSpace(parts[1])
 		}
 
-		info, _ := RunCmd("flatpak", "info", appID)
-		if strings.Contains(info, execPath) || strings.Contains(info, filepath.Base(execPath)) {
-			version := extractFlatpakVersion(info)
-			return &Result{
-				Found:          true,
-				ExecutablePath: execPath,
-				Manager:        ManagerFlatpak,
-				Package:        appID,
-				Version:        version,
-				Remote:         origin,
-				InstallCmd:     "flatpak install " + origin + " " + appID,
-				UpgradeCmd:     "flatpak update " + appID,
-				RemoveCmd:      "flatpak uninstall " + appID,
-			}
+		info := flatpakInfo(appID)
+		if info == "" {
+			continue
+		}
+		if !containsWord(info, execPath) && !containsWord(info, base) {
+			continue
+		}
+		version := extractFlatpakVersion(info)
+		return &Result{
+			Found:          true,
+			ExecutablePath: execPath,
+			Manager:        ManagerFlatpak,
+			Package:        appID,
+			Version:        version,
+			Remote:         origin,
+			InstallCmd:     "flatpak install " + origin + " " + appID,
+			UpgradeCmd:     "flatpak update " + appID,
+			RemoveCmd:      "flatpak uninstall " + appID,
+			ConfirmReasons: []Reason{{
+				Signal: "manager_db",
+				Detail: "flatpak info confirms app " + appID,
+				Weight: int(ConfidenceHigh),
+			}},
 		}
 	}
 

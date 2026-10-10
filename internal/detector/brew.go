@@ -16,7 +16,7 @@ func (d *BrewDetector) IsAvailable() bool {
 }
 
 func (d *BrewDetector) Detect(execPath string) *Result {
-	prefix, _ := RunCmd("brew", "--prefix")
+	prefix := brewPrefix()
 	if prefix == "" {
 		return nil
 	}
@@ -26,7 +26,7 @@ func (d *BrewDetector) Detect(execPath string) *Result {
 	}
 
 	base := filepath.Base(execPath)
-	info, err := RunCmd("brew", "info", "--json=v2", base)
+	info, err := memoizedRunCmd("brew", "info", "--json=v2", base)
 	if err != nil {
 		return &Result{
 			Found:          true,
@@ -36,6 +36,11 @@ func (d *BrewDetector) Detect(execPath string) *Result {
 			InstallCmd:     "brew install " + base,
 			UpgradeCmd:     "brew upgrade " + base,
 			RemoveCmd:      "brew uninstall " + base,
+			ConfirmReasons: []Reason{{
+				Signal: "manager_db",
+				Detail: "path is under brew prefix " + prefix,
+				Weight: int(ConfidenceHigh),
+			}},
 		}
 	}
 
@@ -50,6 +55,11 @@ func (d *BrewDetector) Detect(execPath string) *Result {
 		InstallCmd:     "brew install " + base,
 		UpgradeCmd:     "brew upgrade " + base,
 		RemoveCmd:      "brew uninstall " + base,
+		ConfirmReasons: []Reason{{
+			Signal: "manager_db",
+			Detail: "brew info confirms package " + base,
+			Weight: int(ConfidenceHigh),
+		}},
 	}
 }
 

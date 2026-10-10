@@ -46,6 +46,7 @@ func SetSystem(s System) {
 		s = realSystem{}
 	}
 	sys = s
+	clearMemo()
 }
 
 func currentSystem() System {
@@ -317,8 +318,7 @@ func IsNotFound(err error) bool {
 const cmdTimeout = 15 * time.Second
 
 func HasCommand(name string) bool {
-	_, err := currentSystem().LookPath(name)
-	return err == nil
+	return memoizedHasCommand(name)
 }
 
 // RunCmd runs name with args, returning combined stdout/stderr trimmed of

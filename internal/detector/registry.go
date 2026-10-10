@@ -116,7 +116,7 @@ func DetectBatch(paths []ResolvedPath, names []string) []*Result {
 		return results
 	}
 	workers := min(runtime.GOMAXPROCS(0), 8)
-	jobs := make(chan int)
+	jobs := make(chan int, len(paths))
 	var wg sync.WaitGroup
 	for range workers {
 		wg.Add(1)
@@ -171,13 +171,18 @@ func DetectFirst(execPath ResolvedPath) *Result {
 
 func DetectRuntime(execPath ResolvedPath) (RuntimeType, string, string, int) {
 	detectors := GetAllRuntimes()
+	// Check both the symlink path and the resolved target: fnm multishell
+	// shims live outside the store while their target is inside it (and vice
+	// versa for nvm wrappers). Checking only Real misses those.
 	for _, d := range detectors {
 		if !d.IsAvailable() {
 			continue
 		}
-		rt, version, manager, confidence := d.Detect(execPath.Real)
-		if rt != RuntimeNone && confidence > 0 {
-			return rt, version, manager, confidence
+		for _, p := range execPath.Both() {
+			rt, version, manager, confidence := d.Detect(p)
+			if rt != RuntimeNone && confidence > 0 {
+				return rt, version, manager, confidence
+			}
 		}
 	}
 	return RuntimeNone, "", "", 0
@@ -228,6 +233,17 @@ func DetectWithRuntime(execPath ResolvedPath, name string) *Result {
 		pmOwnsRealPackage := pmDetected && !isRuntimeBundledPackage(r.Package)
 		if !pmOwnsRealPackage {
 			applyRuntimeOwner(r, rt, runtimeVersionNumber(version))
+			// The previous ConfirmReasons (if any) belonged to the
+			// package manager's claim (e.g. "npm prefix owns this path"),
+			// not to the runtime that now owns the result. Keeping them
+			// would let decorateConfidence report "confirmed by npm" for
+			// an fnm-owned node. Replace with runtime ownership proof so
+			// the 90% score is backed by the actual owner.
+			r.ConfirmReasons = []Reason{{
+				Signal: "runtime_db",
+				Detail: string(rt) + " owns this path (" + version + ")",
+				Weight: int(ConfidenceHigh),
+			}}
 		}
 		// Re-evaluate the structural band for the (possibly new) manager.
 		band, reasons = scoreFor(r.Manager, execPath)
@@ -316,9 +332,9 @@ func priorityOrder(m Manager) int {
 		ManagerNpm:       11,
 		ManagerPnpm:      12,
 		ManagerYarn:      13,
-		ManagerPip:       20,
-		ManagerPipx:      21,
-		ManagerUv:        22,
+		ManagerPipx:      20,
+		ManagerUv:        21,
+		ManagerPip:       22,
 		ManagerCargo:     30,
 		ManagerGo:        31,
 		ManagerGem:       32,

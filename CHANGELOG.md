@@ -3,6 +3,42 @@
 Semua perubahan penting pada `spkg` didokumentasikan di sini. Proyek mengikuti
 [Semantic Versioning](https://semver.org/).
 
+## [1.5.0] - 2026-10-10
+
+### Performance — memoization detector queries
+- **Per-process memo** (`internal/detector/memo.go`): hasil query global yang
+  idempoten (`npm prefix/list`, `cargo install --list`, `pipx list`,
+  `uv tool list`, `brew --prefix`, `go env GOPATH`, `flatpak list/info`,
+  `snap list/info`, `gem list -d`, ...) di-cache selama proses berjalan,
+  sehingga cold scan `spkg all` tidak lagi men-spawn 100+ subprocess berulang.
+- **`HasCommand` di-memoize**: 23× `LookPath` per binary menjadi map lookup
+  setelah panggilan pertama; di-reset otomatis saat `SetSystem()` agar test
+  mock tetap deterministik.
+- **N+1 flatpak/snap**: `flatpak info`/`snap info` per aplikasi kini dipakai
+  ulang antar binary dalam satu run.
+- `DetectBatch` memakai buffered channel; deteksi AUR helper memakai
+  `HasCommand` memoized, bukan `which` per paket.
+- Hasil: suite test `cli+detector` ~11.6s → ~5.5s.
+
+### Akurasi deteksi
+- **Exact matching**: `uv`, `pipx`, `pnpm`, `yarn`, `gem` (`Executables:`),
+  `docker`/`podman` (nama repository) tidak lagi memakai substring —
+  `black` tidak lagi match `blackd`, `ruff` tidak match `ruff-lsp`.
+- **`ConfirmReasons` untuk semua detector terverifikasi** (npm, pnpm, yarn,
+  bun, pip, pipx, uv, cargo, brew, flatpak, snap, nix, composer, gem,
+  docker, podman): klaim yang dikonfirmasi tool-nya sendiri kini mencapai
+  `high` (90), bukan mentok di 70-80.
+- **`pacman Score` tidak lagi klaim `/opt/`**: dir shared tersebut butuh
+  bukti `pacman -Qo` via `Detect`.
+- **`DetectRuntime` cek symlink + target** (`Both()`): shim multishell fnm/nvm
+  yang targetnya di store (atau sebaliknya) tidak lagi miss.
+- **Prioritas `pipx < uv < pip`** di `~/.local/bin` yang shared: verifikasi
+  kuat (venv stat, tool list) menang atas `pip show` yang lemah.
+- **Bukti runtime tidak basi**: saat runtime mengambil alih paket bundled
+  (mis. node milik fnm), `ConfirmReasons` diganti bukti `runtime_db`
+  sehingga alasan `spkg node` bersih (`fnm owns this path`).
+- Tes regresi baru: `internal/detector/accuracy_test.go` (7 test).
+
 ## [1.4.0] - 2026-08-30
 
 - **Batch mode**: `spkg ls cat grep node` — deteksi banyak executable sekaligus

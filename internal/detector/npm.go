@@ -16,7 +16,7 @@ func (d *NpmDetector) IsAvailable() bool {
 }
 
 func (d *NpmDetector) Detect(execPath string) *Result {
-	prefix, _ := RunCmd("npm", "prefix", "-g")
+	prefix := npmPrefix()
 	if prefix == "" {
 		return nil
 	}
@@ -49,7 +49,7 @@ func (d *NpmDetector) Detect(execPath string) *Result {
 		}
 	}
 
-	globalList, _ := RunCmd("npm", "list", "-g", "--depth=0", "--json")
+	globalList := npmGlobalList()
 	pkgName := extractNpmPkgName(globalList, base)
 	// The resolved path may point at the real script inside the package
 	// (e.g. .../node_modules/9remote/dist/cli.cjs), so `base` is a filename
@@ -71,6 +71,11 @@ func (d *NpmDetector) Detect(execPath string) *Result {
 		InstallCmd:     "npm install -g " + pkgName,
 		UpgradeCmd:     "npm update -g " + pkgName,
 		RemoveCmd:      "npm uninstall -g " + pkgName,
+		ConfirmReasons: []Reason{{
+			Signal: "manager_db",
+			Detail: "npm global prefix owns this path (" + prefix + ")",
+			Weight: int(ConfidenceHigh),
+		}},
 	}
 }
 

@@ -16,7 +16,7 @@ func (d *PnpmDetector) IsAvailable() bool {
 }
 
 func (d *PnpmDetector) Detect(execPath string) *Result {
-	prefix, _ := RunCmd("pnpm", "prefix", "-g")
+	prefix := pnpmPrefix()
 	if prefix == "" {
 		return nil
 	}
@@ -41,7 +41,7 @@ func (d *PnpmDetector) Detect(execPath string) *Result {
 		}
 	}
 
-	list, _ := RunCmd("pnpm", "list", "-g", "--depth=0")
+	list := pnpmGlobalList()
 	pkgName := extractPnpmPkgName(list, base)
 	if pkgName == "" {
 		pkgName = base
@@ -56,22 +56,28 @@ func (d *PnpmDetector) Detect(execPath string) *Result {
 		InstallCmd:     "pnpm add -g " + pkgName,
 		UpgradeCmd:     "pnpm update -g " + pkgName,
 		RemoveCmd:      "pnpm remove -g " + pkgName,
+		ConfirmReasons: []Reason{{
+			Signal: "manager_db",
+			Detail: "pnpm global prefix owns this path (" + prefix + ")",
+			Weight: int(ConfidenceHigh),
+		}},
 	}
 }
 
 func extractPnpmPkgName(listOutput, binName string) string {
 	for _, line := range strings.Split(listOutput, "\n") {
 		line = strings.TrimSpace(line)
-		if strings.Contains(line, binName) {
-			parts := strings.Fields(line)
-			if len(parts) > 0 {
-				name := parts[0]
-				// Strip trailing version: @scope/pkg@2.0.0 → @scope/pkg
-				if idx := strings.LastIndex(name, "@"); idx > 0 {
-					name = name[:idx]
-				}
-				return name
+		if !containsWord(line, binName) {
+			continue
+		}
+		parts := strings.Fields(line)
+		if len(parts) > 0 {
+			name := parts[0]
+			// Strip trailing version: @scope/pkg@2.0.0 → @scope/pkg
+			if idx := strings.LastIndex(name, "@"); idx > 0 {
+				name = name[:idx]
 			}
+			return name
 		}
 	}
 	return ""

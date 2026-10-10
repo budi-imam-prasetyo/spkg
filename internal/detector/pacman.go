@@ -65,9 +65,10 @@ func (d *PacmanDetector) Detect(execPath string) *Result {
 
 	if isAUR {
 		// Try to detect AUR helper by checking if they're installed
-		// Priority: paru > yay > pikaur > pakku
+		// Priority: paru > yay > pikaur > pakku. HasCommand is memoized
+		// per-process so this costs one PATH walk per helper per run.
 		for _, helper := range []string{"paru", "yay", "pikaur", "pakku"} {
-			if _, err := RunCmd("which", helper); err == nil {
+			if HasCommand(helper) {
 				aurHelper = helper
 				installCmd = helper + " -S " + pkgName
 				upgradeCmd = helper + " -Syu " + pkgName
@@ -107,9 +108,11 @@ func (d *PacmanDetector) Detect(execPath string) *Result {
 }
 
 func (d *PacmanDetector) Score(execPath string) (Confidence, []Reason) {
-	// pacman owns anything under the system root that isn't a known user/alt
-	// domain. We give a medium structural floor; confirmation comes from -Qo.
-	if strings.HasPrefix(execPath, "/usr/bin/") || strings.HasPrefix(execPath, "/usr/lib/") || strings.HasPrefix(execPath, "/bin/") || strings.HasPrefix(execPath, "/opt/") {
+	// pacman owns system paths from its DB. /opt and /usr/local are
+	// deliberately excluded: they are shared with manual installs, nix,
+	// AppImages and third-party tarballs, so claiming them at Medium produced
+	// false-high confidence. pacman -Qo remains the authority via Detect.
+	if strings.HasPrefix(execPath, "/usr/bin/") || strings.HasPrefix(execPath, "/usr/lib/") || strings.HasPrefix(execPath, "/bin/") {
 		return ConfidenceMedium, []Reason{{Signal: "path_match", Detail: "path is under a system install dir (pacman domain)", Weight: int(ConfidenceMedium)}}
 	}
 	return ConfidenceUnknown, nil

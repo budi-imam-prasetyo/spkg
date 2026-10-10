@@ -22,33 +22,42 @@ func (d *UvDetector) Detect(execPath string) *Result {
 		return nil
 	}
 
-	show, err := RunCmd("uv", "tool", "list")
+	show, err := uvToolList()
 	if err != nil {
 		return nil
 	}
 
 	base := filepath.Base(execPath)
 	for _, line := range strings.Split(show, "\n") {
-		if strings.Contains(line, base) {
-			parts := strings.Fields(line)
-			if len(parts) > 0 {
-				pkgName := parts[0]
-				// Require the binary to live in uv's tool bin dir
-				// (~/.local/bin, shared with pipx) before trusting the match.
-				uvToolBin := filepath.Join(home, ".local", "bin")
-				if !strings.HasPrefix(execPath, uvToolBin) {
-					continue
-				}
-				return &Result{
-					Found:          true,
-					ExecutablePath: execPath,
-					Manager:        ManagerUv,
-					Package:        pkgName,
-					InstallCmd:     "uv tool install " + pkgName,
-					UpgradeCmd:     "uv tool upgrade " + pkgName,
-					RemoveCmd:      "uv tool uninstall " + pkgName,
-				}
-			}
+		parts := strings.Fields(line)
+		if len(parts) == 0 {
+			continue
+		}
+		// Exact match on the tool name (first field), not substring:
+		// "ruff" must not match "ruff-lsp".
+		pkgName := strings.TrimRight(parts[0], ":")
+		if !strings.EqualFold(pkgName, base) {
+			continue
+		}
+		// Require the binary to live in uv's tool bin dir
+		// (~/.local/bin, shared with pipx) before trusting the match.
+		uvToolBin := filepath.Join(home, ".local", "bin")
+		if !strings.HasPrefix(execPath, uvToolBin) {
+			continue
+		}
+		return &Result{
+			Found:          true,
+			ExecutablePath: execPath,
+			Manager:        ManagerUv,
+			Package:        pkgName,
+			InstallCmd:     "uv tool install " + pkgName,
+			UpgradeCmd:     "uv tool upgrade " + pkgName,
+			RemoveCmd:      "uv tool uninstall " + pkgName,
+			ConfirmReasons: []Reason{{
+				Signal: "manager_db",
+				Detail: "uv tool list confirms package " + pkgName,
+				Weight: int(ConfidenceHigh),
+			}},
 		}
 	}
 

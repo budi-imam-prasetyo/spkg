@@ -16,7 +16,7 @@ func (d *YarnDetector) IsAvailable() bool {
 }
 
 func (d *YarnDetector) Detect(execPath string) *Result {
-	globalDir, _ := RunCmd("yarn", "global", "dir")
+	globalDir := yarnGlobalDir()
 	if globalDir == "" || strings.Contains(strings.ToLower(globalDir), "error") {
 		return nil
 	}
@@ -41,7 +41,7 @@ func (d *YarnDetector) Detect(execPath string) *Result {
 		}
 	}
 
-	list, _ := RunCmd("yarn", "global", "list", "--depth=0")
+	list := yarnGlobalList()
 	pkgName := extractYarnPkgName(list, base)
 	if pkgName == "" {
 		pkgName = base
@@ -56,19 +56,25 @@ func (d *YarnDetector) Detect(execPath string) *Result {
 		InstallCmd:     "yarn global add " + pkgName,
 		UpgradeCmd:     "yarn global upgrade " + pkgName,
 		RemoveCmd:      "yarn global remove " + pkgName,
+		ConfirmReasons: []Reason{{
+			Signal: "manager_db",
+			Detail: "yarn global dir owns this path (" + globalDir + ")",
+			Weight: int(ConfidenceHigh),
+		}},
 	}
 }
 
 func extractYarnPkgName(listOutput, binName string) string {
 	for _, line := range strings.Split(listOutput, "\n") {
-		if strings.Contains(line, binName) {
-			parts := strings.Fields(line)
-			for _, p := range parts {
-				if strings.Contains(p, "@") {
-					name := strings.Trim(p, ",")
-					if idx := strings.LastIndex(name, "@"); idx > 0 {
-						return name[:idx]
-					}
+		if !containsWord(line, binName) {
+			continue
+		}
+		parts := strings.Fields(line)
+		for _, p := range parts {
+			if strings.Contains(p, "@") {
+				name := strings.Trim(p, ",")
+				if idx := strings.LastIndex(name, "@"); idx > 0 {
+					return name[:idx]
 				}
 			}
 		}
