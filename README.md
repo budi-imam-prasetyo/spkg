@@ -1,288 +1,281 @@
 # spkg
 
-<div align="center">
+Cari package manager atau runtime manager yang kemungkinan mengelola executable di Linux.
 
-**Kenali siapa yang menginstall executable di sistem Linux Anda.**
-
-[![Go](https://img.shields.io/badge/Go-1.22+-00ADD8?logo=go&logoColor=white)](https://go.dev)
+[![Go](https://img.shields.io/badge/Go-1.24+-00ADD8?logo=go&logoColor=white)](go.mod)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Linux-4EAA25?logo=linux&logoColor=white)](https://www.linux.org)
-
-</div>
-
-<br>
-
-`spkg` menjawab satu pertanyaan sederhana tapi sering membingungkan:
-
-> *"Executable ini dipasang oleh apa? pacman? paru? npm? cargo? fnm?"*
-
-Cukup satu perintah, dan `spkg` memberi tahu **siapa pemiliknya**, **versi berapa**,
-**di repository mana**, dan **command apa yang harus dipakai** untuk install, upgrade,
-atau hapus — lengkap dengan skor confidence berbasis bukti.
-
----
-
-## ✨ Fitur
-
-| | |
-|---|---|
-| 🔍 **23 package manager** | pacman, paru, yay, bun, npm, pnpm, yarn, pip, pipx, uv, cargo, go, gem, composer, flatpak, snap, homebrew, nix, docker, podman, distrobox, toolbox, appimage + manual fallback |
-| ⚡ **Runtime detection** | fnm, nvm, volta, rustup diakui sebagai *owner* utama executable; asdf, mise, pyenv, conda, mamba, pixi, poetry, rbenv, RVM, SDKMAN!, jenv, gvm, goenv, phpenv, kerl dideteksi sebagai runtime dan diatribusikan ke package manager di bawahnya (pip/gem/go) |
-| 🎯 **AUR helper aware** | Mendeteksi apakah paket AUR dipasang via `paru`, `yay`, `pikaur`, atau `pakku` — command install/upgrade otomatis disesuaikan |
-| 📊 **Confidence scoring** | Skor 0–100 berbasis bukti (path domain, konfirmasi DB, runtime ownership, exclusion bonus) + alasan eksplisit, bukan angka misterius |
-| 🖼️ **Output berborder** | Tabel ASCII dengan rounded corners, header berwarna, dan padding rapi |
-| 📦 **Batch mode** | `spkg ls cat grep` — cek banyak executable sekaligus dalam satu perintah |
-| 💾 **Cache persisten** | Gob serialization ke disk — query ulang <1ms, cold scan ~20s |
-| 🧵 **Timeout & safety** | Setiap subprocess dibatasi 15 detik; tidak ada command injection |
-| 🧪 **Testable engine** | Interface `System` yang bisa di-mock untuk test deterministik tanpa tooling host |
-
----
-
-## 🚀 Instalasi
-
-### Dari source (disarankan)
+[![Platform](https://img.shields.io/badge/Platform-Linux-4EAA25?logo=linux&logoColor=white)](.github/workflows/ci.yml)
 
 ```bash
-git clone https://github.com/ryoukaii/spkg.git
+spkg git
+spkg node npm python3
+spkg explain node -o pretty
+```
+
+`spkg` mencari executable melalui `PATH` atau path yang diberikan, mengikuti
+symlink, lalu menggabungkan informasi path dan hasil query tool yang tersedia.
+Hasilnya dapat mencakup manager, paket, versi, metadata runtime, alasan deteksi,
+serta saran perintah install, upgrade, dan remove. Kelengkapan informasi
+bergantung pada detektor yang cocok.
+
+Repositori: [budi-imam-prasetyo/spkg](https://github.com/budi-imam-prasetyo/spkg).
+
+## Instalasi
+
+### Build dari source
+
+Memerlukan Linux, Git, Go **1.24 atau lebih baru**, dan Make untuk perintah `make`.
+
+```bash
+git clone https://github.com/budi-imam-prasetyo/spkg.git
 cd spkg
-make install
+make build
 ```
 
-### Dari GitHub Releases
+Pasang binary hasil build untuk pengguna saat ini:
 
 ```bash
-# Linux amd64
-curl -sL https://github.com/ryoukaii/spkg/releases/latest/download/spkg_linux_amd64.tar.gz \
-  | tar xz -C ~/.local/bin spkg
-
-# Linux arm64
-curl -sL https://github.com/ryoukaii/spkg/releases/latest/download/spkg_linux_arm64.tar.gz \
-  | tar xz -C ~/.local/bin spkg
+install -Dm755 ./spkg "$HOME/.local/bin/spkg"
 ```
 
-### Verifikasi
+Pastikan `~/.local/bin` masuk dalam `PATH`. Untuk instalasi sistem ke
+`/usr/local/bin`, jalankan `make install` **setelah** `make build`;
+target install menggunakan `sudo` dan hanya menyalin binary yang sudah ada.
+
+Tanpa Make, binary pengembangan dapat dibangun dengan:
+
+```bash
+go build -o spkg .
+```
+
+### Binary dari GitHub Releases
+
+[Rilis GitHub](https://github.com/budi-imam-prasetyo/spkg/releases) menyediakan
+binary Linux untuk `amd64` dan `arm64`. Aset yang diterbitkan workflow saat ini
+bernama `spkg-linux-amd64` dan `spkg-linux-arm64`, tanpa arsip `.tar.gz`.
+
+Untuk Linux amd64 / x86-64:
+
+```bash
+curl -fL https://github.com/budi-imam-prasetyo/spkg/releases/latest/download/spkg-linux-amd64 -o spkg-linux-amd64
+install -Dm755 ./spkg-linux-amd64 "$HOME/.local/bin/spkg"
+```
+
+Untuk Linux arm64 / AArch64:
+
+```bash
+curl -fL https://github.com/budi-imam-prasetyo/spkg/releases/latest/download/spkg-linux-arm64 -o spkg-linux-arm64
+install -Dm755 ./spkg-linux-arm64 "$HOME/.local/bin/spkg"
+```
+
+### Memeriksa versi
 
 ```bash
 spkg --version
-# spkg version v0.3.0
+spkg version
 ```
 
----
+Versi berasal dari nilai yang disisipkan saat build. `make build` mengambilnya
+dari Git; `go build` biasa memakai `dev`. Workflow CI saat ini juga membangun
+binary rilis tanpa menyisipkan versi, sehingga binary unduhan dapat melaporkan
+`dev` meskipun berada pada halaman rilis bertag.
 
-## 📖 Penggunaan
+## Penggunaan
 
-### Query satu executable
+### Satu executable
 
 ```bash
-spkg python3
+spkg git
+spkg /usr/bin/python3
+spkg node -o json
+spkg npm --no-cache -v
 ```
 
-```
-╭────────────┬─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│   Field    │                                                        Value                                                        │
-├────────────┼─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ Executable │ /bin/python3                                                                                                        │
-│ Manager    │ pacman                                                                                                              │
-│ Package    │ python                                                                                                              │
-│ Version    │ 3.14.6-3                                                                                                            │
-│ Confidence │ 90% (high)                                                                                                          │
-│ Reasons    │ path is under a system install dir (pacman domain); pacman -Qo confirms ownership by package python                  │
-│ Install    │ sudo pacman -S python                                                                                               │
-│ Upgrade    │ sudo pacman -Syu python                                                                                             │
-│ Remove     │ sudo pacman -Rns python                                                                                             │
-╰────────────┴─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-```
+Output default berupa tabel `Field` / `Value`. Pilihan `pretty` menampilkan
+rincian per bagian, `plain` menampilkan sejumlah field sebagai teks sederhana,
+dan `json` / `yaml` menyediakan hasil terstruktur.
 
-### Query banyak executable sekaligus
+Perintah install, upgrade, dan remove pada hasil merupakan saran yang dicetak;
+`spkg` tidak menjalankannya. Detektor tetap menjalankan subprocess untuk membaca
+informasi package manager.
+
+### Beberapa executable
 
 ```bash
-spkg ls cat grep awk sed
+spkg ls cat grep
+spkg node npm python3 -o json
 ```
 
-```
-╭────────────┬────────╮
-│ Executable │ Source │
-├────────────┼────────┤
-│ ls         │ pacman │
-│ cat        │ pacman │
-│ grep       │ pacman │
-│ awk        │ pacman │
-│ sed        │ pacman │
-╰────────────┴────────╯
-```
+Tabel batch berisi kolom `Executable` / `Source`, mengikuti urutan argumen.
+Executable yang tidak ditemukan dilewati; proses gagal jika tidak ada satu pun
+argumen yang ditemukan. Query satu executable yang tidak ditemukan juga
+menghasilkan exit code non-zero.
 
-### Scan executable umum di sistem
+JSON/YAML batch berupa daftar ringkas dengan field `executable`, `manager`,
+serta `package`, `runtime`, dan `runtime_version` jika tersedia. Untuk rincian
+seperti versi paket, confidence, dan saran perintah, gunakan query satu executable
+berformat JSON/YAML.
+
+### Memeriksa executable umum
 
 ```bash
 spkg all
 spkg all -o json > packages.json
 ```
 
-### Runtime manager (fnm, nvm, pyenv, dll)
+`all` memeriksa daftar nama executable umum yang ditentukan di kode, seperti
+`git`, `node`, `python3`, dan `cargo`. Perintah ini tidak menginventarisasi seluruh
+paket terpasang atau seluruh isi `PATH`. Hasilnya memakai format ringkas batch.
+
+### Penjelasan lokasi dan runtime
 
 ```bash
-spkg node
+spkg explain node -o pretty
+spkg explain python3 -o json
 ```
 
-```
-╭─────────────────┬─────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│     Field       │                                                        Value                                                        │
-├─────────────────┼─────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ Executable      │ /home/ryoukaii/.local/share/fnm/node-versions/v24.20.0/installation/bin/node                                    │
-│ Manager         │ fnm                                                                                                              │
-│ Runtime         │ fnm                                                                                                              │
-│ Runtime version │ Node.js 24.20.0                                                                                                  │
-│ Package         │ node                                                                                                             │
-│ Confidence      │ 80% (medium)                                                                                                     │
-│ Install         │ fnm install 24.20.0                                                                                              │
-│ Upgrade         │ fnm install --latest                                                                                             │
-│ Remove          │ fnm uninstall 24.20.0                                                                                            │
-╰─────────────────┴─────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-```
+`explain` menjalankan deteksi langsung dan menambahkan penjelasan lokasi,
+symlink, runtime, serta manager. Gunakan `pretty`, `json`, atau `yaml` untuk
+melihat penjelasan; renderer `table` dan `plain` saat ini tidak menampilkan
+field tersebut.
 
-### Paket AUR via helper
+### Opsi
+
+| Opsi | Perilaku |
+|---|---|
+| `-o, --output` | `table` (default), `pretty`, `plain`, `json`, atau `yaml` |
+| `-v, --verbose` | Diagnostik pencarian dan command yang gagal ke stderr pada query executable utama |
+| `--no-cache` | Lewati pembacaan dan penulisan hasil deteksi persisten pada query utama dan `all` |
+| `--cache-ttl` | TTL dalam detik untuk entri baru; default `600`. Gunakan nilai positif; nilai nol/negatif tidak menonaktifkan cache |
+| `--version` | Tampilkan versi build |
+| `-h, --help` | Tampilkan bantuan |
 
 ```bash
-spkg code
+spkg --help
+spkg explain --help
+spkg cache --help
 ```
 
-```
-╭────────────┬──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│   Field    │                                                        Value                                                        │
-├────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ Executable │ /bin/code                                                                                                           │
-│ Manager    │ pacman                                                                                                              │
-│ Package    │ visual-studio-code-bin                                                                                              │
-│ Repository │ aur                                                                                                                 │
-│ AUR        │ yes                                                                                                                 │
-│ Version    │ 1.134.0-1                                                                                                           │
-│ Install    │ paru -S visual-studio-code-bin                                                                                      │
-│ Upgrade    │ paru -Syu visual-studio-code-bin                                                                                    │
-│ Remove     │ paru -Rns visual-studio-code-bin                                                                                    │
-╰────────────┴──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-```
-
-Perhatikan: `spkg` tahu VS Code dipasang via **`paru`**, bukan `pacman` langsung —
-jadi command-nya sudah benar.
-
----
-
-## 🎛️ Opsi
-
-```
-spkg [executable...] [flags]
-
-Flags:
-  -o, --output string   Output format: table, json, yaml, plain, pretty (default "table")
-  -v, --verbose         Show verbose detection output
-      --no-cache        Skip cache
-      --cache-ttl int   Cache TTL in seconds (default: 600)
-  -h, --help            Help for spkg
-      --version         Version for spkg
-```
-
-### Subcommand
-
-| Command | Deskripsi |
-|---------|-----------|
-| `spkg all` | Scan executable umum di sistem |
-| `spkg cache stats` | Lihat jumlah item cache |
-| `spkg cache clear` | Bersihkan cache |
-| `spkg cache items` | Tampilkan isi cache |
-
----
-
-## 🧠 Bagaimana Confidence Scoring Bekerja
-
-`spkg` tidak menebak. Setiap skor 0–100 dibangun dari bukti berlapis:
-
-| Level | Skor | Artinya |
-|-------|------|---------|
-| `unknown` | 0 | Tidak ada bukti — fallback manual |
-| `low` | 40 | Indikasi lemah (prefix path ambigu) |
-| `medium` | 70 | Bukti struktural kuat (path di domain manager) |
-| `high` | 90 | Konfirmasi command-level (`pacman -Qo`) |
-| `certain` | 100 | Ownership DB-backed |
-
-Komponen yang dikombinasikan oleh `CombineConfidence`:
-
-1. **Structural band** — sinyal dari `Score()` tanpa subprocess
-2. **Command confirmation** — menaikkan ke `high` jika DB konfirmasi
-3. **Runtime ownership** — runtime manager meng-own path tersebut
-4. **Exclusion bonus** — semakin sedikit manager lain yang match, semakin yakin (maksimal +10)
-
-Setiap alasan dicetak eksplisit di field `Reasons`, jadi Anda selalu tahu **mengapa**
-`spkg` menyimpulkan sesuatu.
-
----
-
-## 🏗️ Arsitektur Engine
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                        CLI (cobra)                           │
-│   runDetect → single | batch → output (table/json/yaml)     │
-└──────────────────────────┬──────────────────────────────────┘
-                           │
-┌──────────────────────────▼──────────────────────────────────┐
-│                   Registry (registry.go)                     │
-│   DetectWithRuntime: priority order + runtime overlay       │
-│   DetectBatch: bounded worker pool (max 8)                  │
-└──────┬───────────────────────────────────────────┬──────────┘
-       │                                           │
-┌──────▼──────────────┐                  ┌─────────▼──────────┐
-│  Detector interface │                  │ RuntimeDetector    │
-│  • Name()           │                  │ • Name()           │
-│  • Detect(path)     │                  │ • Detect(path)     │
-│  • IsAvailable()    │                  │ • IsAvailable()    │
-│  • Score(path)      │                  └────────────────────┘
-└──────┬──────────────┘
-       │
-┌──────▼──────────────────────────────────────────────────────┐
-│                Confidence Engine (confidence.go)              │
-│   CombineConfidence → structural + confirm + runtime + bonus │
-└──────┬──────────────────────────────────────────────────────┘
-       │
-┌──────▼──────────────────────────────────────────────────────┐
-│              System interface (mockable)                     │
-│   LookPath() • CmdContext()  ← RWMutex-guarded              │
-└──────────────────────────────────────────────────────────────┘
-```
-
-**Keputusan desain penting:**
-
-- **`Detect()` vs `Score()`** — pemisahan operasi mahal (subprocess) dari sinyal murah (string match), sehingga `Score()` bisa dijalankan paralel tanpa side effect.
-- **Priority order eksplisit** — `pacman(1) < paru(2) < fnm(8) < npm(11) < manual(99)`. Bukan urutan registrasi, tapi urutan bisnis.
-- **Runtime menang jika meng-own path** — `node` di bawah `~/.local/share/fnm/` dimiliki `fnm`, bukan `npm`, meskipun `npm` juga ada di sana.
-- **System interface di-mock** — `SetSystem(fake)` memungkinkan test deterministik tanpa tooling host, dan dilindungi `RWMutex` untuk aman concurrent.
-
----
-
-## 🧪 Development
+### Cache
 
 ```bash
-make test      # go test -v -race -coverprofile
-make lint      # golangci-lint run ./...
-make build     # go build dengan ldflags version
-make clean     # hapus artefak
+spkg cache stats
+spkg cache clear
 ```
 
-Menambah detector baru hanya butuh satu file:
+Hasil deteksi disimpan dalam format gob di
+`$XDG_CACHE_HOME/spkg/cache-v2.gob`, atau `~/.cache/spkg/cache-v2.gob` jika
+`XDG_CACHE_HOME` tidak diatur. Key mencakup nama query, path awal, dan target
+symlink. Batch menyimpan hasil baru sekaligus; file diperbarui secara atomik
+dengan penguncian antarproses.
 
-```go
-// internal/detector/mytool.go
-type MyToolDetector struct{}
+TTL default adalah 10 menit. Perubahan paket di luar `spkg` dapat membuat hasil
+cache tertinggal sampai kedaluwarsa; gunakan `--no-cache` atau `cache clear`
+untuk memeriksa ulang. Opsi `--cache-ttl` tidak mengubah kedaluwarsa entri yang
+sudah tersimpan.
 
-func (d *MyToolDetector) Name() Manager { return ManagerMyTool }
-func (d *MyToolDetector) Detect(execPath string) *Result { /* ... */ }
-func (d *MyToolDetector) IsAvailable() bool { return HasCommand("mytool") }
-func (d *MyToolDetector) Score(execPath string) (Confidence, []Reason) { /* ... */ }
+Query global tertentu juga dimemoisasi selama proses berjalan. `--no-cache`
+tidak menonaktifkan memoization tersebut. Kecepatan bergantung pada jumlah
+executable, tool yang tersedia, dan waktu respons masing-masing tool.
 
-func init() { Register(&MyToolDetector{}) }
+## Cakupan deteksi
+
+| Kelompok | Detektor yang tersedia |
+|---|---|
+| Paket sistem | pacman |
+| JavaScript | Bun, npm, pnpm, Yarn |
+| Python | pip, pipx, uv |
+| Bahasa lain | Cargo, Go, RubyGems, Composer |
+| Aplikasi dan lingkungan | Flatpak, Snap, Homebrew, Nix, AppImage |
+| Container | Docker, Podman, Distrobox, Toolbox; pemeriksaan path/nama terbatas |
+
+Runtime detector mencakup fnm, nvm, Volta, Bun, rustup, pyenv, conda, mamba,
+micromamba, pixi, rye, Poetry, rbenv, RVM, SDKMAN!, jenv, gvm, goenv, phpenv,
+asdf, mise, dan kerl. Pengenalan terutama bergantung pada struktur path dan
+ketersediaan tool atau direktori yang diperiksa oleh masing-masing detektor.
+
+Untuk tooling bawaan runtime, fnm, nvm, Volta, rustup, dan Bun dapat menjadi
+`manager` utama. Runtime lain dapat dipetakan ke `pip`, `gem`, `go`, atau
+`manual`, sementara identitas runtime tetap tersedia pada metadata. Paket pihak
+ketiga yang berhasil dikenali tetap dapat dimiliki package manager, dengan
+runtime sebagai informasi tambahan.
+
+### Paket foreign dan helper AUR
+
+Detektor pacman memakai `pacman -Qm` untuk mengenali paket foreign, kemudian
+memilih helper yang tersedia dengan urutan `paru`, `yay`, `pikaur`, lalu `pakku`.
+Jika ditemukan, helper tersebut digunakan pada field manager dan saran perintah.
+
+Ini tidak membuktikan helper mana yang dahulu menginstal paket. Paket foreign
+juga dapat berasal dari build lokal atau sumber lain; label `aur` pada hasil
+merupakan asumsi detektor, bukan verifikasi terhadap AUR. `paru` dan `yay`
+bukan detektor kepemilikan yang terpisah dari pacman.
+
+### Batasan
+
+- Belum ada detektor kepemilikan paket apt/dpkg, RPM/dnf, atau APK. Pada distro
+  tersebut, executable sistem dapat jatuh ke fallback `manual`.
+- `manual` berarti tidak ada detektor yang cocok. Hasil itu tidak membuktikan
+  bahwa executable dipasang secara manual.
+- Beberapa detektor memakai heuristik path atau nama. Nama paket, versi,
+  repository, dan saran perintah tidak selalu lengkap atau benar untuk setiap
+  layout instalasi.
+- Query subprocess menggunakan context timeout 15 detik per command. Satu
+  deteksi dapat menjalankan beberapa command, sehingga total waktunya dapat
+  lebih dari 15 detik.
+
+## Confidence
+
+Confidence adalah skor heuristik 0–100, bukan probabilitas terkalibrasi atau
+jaminan bahwa atribusi benar. Field `Reasons` menjelaskan sinyal yang dipakai.
+
+| Label | Rentang skor |
+|---|---|
+| `unknown` | 0 |
+| `low` | 1–49 |
+| `medium` | 50–89 |
+| `high` | 90–99 |
+| `certain` | 100 |
+
+Skor awal berasal dari `Score()`, umumnya 0, 40, atau 70. Bukti konfirmasi yang
+dilampirkan detektor dapat menaikkannya ke setidaknya 90. Kepemilikan runtime
+memberi dasar setidaknya 70; pengecualian manager lain dapat menambah hingga
+10 poin ketika skor dasar masih di bawah 90. Konfirmasi command tidak otomatis
+menghasilkan 100, dan label `certain` tidak berarti bukti kriptografis.
+
+Fallback manual memiliki skor 0. Pada JSON/YAML satu hasil, field `confidence`
+yang bernilai nol dihilangkan oleh serializer; alasannya tetap dapat tersedia.
+
+## Pengembangan
+
+```bash
+make build     # build binary dengan metadata versi Git
+make test      # go test -v -race -coverprofile=coverage.out ./...
+make lint      # golangci-lint run ./...; membutuhkan golangci-lint terpasang
+make clean     # hapus binary dan coverage.out
 ```
 
----
+Kode utama berada di:
 
-## 📄 Lisensi
+- [`internal/cli`](internal/cli): command, opsi, dan cache hasil query.
+- [`internal/detector`](internal/detector): resolusi path, detektor paket/runtime,
+  prioritas pemilihan, memoization command, dan perhitungan confidence.
+- [`internal/cache`](internal/cache): penyimpanan hasil deteksi di memori dan disk.
+- [`internal/output`](internal/output): renderer tabel, pretty, plain, JSON, dan YAML.
 
-MIT — lihat [LICENSE](LICENSE). Lisensi dependency pihak ketiga: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Detektor paket mengimplementasikan `Name()`, `Detect()`, `IsAvailable()`, dan
+`Score()`, lalu didaftarkan melalui `Register()`. Penambahan manager baru juga
+perlu meninjau konstanta manager, daftar manager, prioritas, dan tes; membuat
+satu file saja belum tentu cukup. Detektor runtime memakai interface dan
+registrasi terpisah. Batch menjalankan paling banyak delapan worker, dibatasi
+juga oleh `GOMAXPROCS`.
+
+CI menguji dengan race detector dan membangun Linux amd64/arm64. Lihat
+[workflow CI](.github/workflows/ci.yml) untuk proses yang benar-benar dijalankan;
+konfigurasi [GoReleaser](.goreleaser.yml) tersedia tetapi tidak dipanggil oleh
+workflow rilis saat ini.
+
+## Lisensi
+
+MIT — hak cipta Budi Imam Prasetyo. Lihat [LICENSE](LICENSE),
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), dan [CHANGELOG.md](CHANGELOG.md).

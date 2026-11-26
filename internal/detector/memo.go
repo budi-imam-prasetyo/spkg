@@ -21,9 +21,16 @@ import (
 // tests stay deterministic.
 
 var (
-	availMemo sync.Map // string -> availEntry
-	cmdMemo   sync.Map // string -> cmdEntry
+	availMemo  sync.Map // string -> availEntry
+	cmdMemo    sync.Map // string -> cmdEntry
+	cmdFlights sync.Map // string -> *cmdFlight
 )
+
+type cmdFlight struct {
+	done chan struct{}
+	out  string
+	err  error
+}
 
 type availEntry struct {
 	ok      bool
@@ -45,8 +52,8 @@ const (
 // clearMemo drops all memoized state. Called from SetSystem so tests that swap
 // the System implementation don't see stale LookPath / command output.
 func clearMemo() {
-	availMemo = sync.Map{}
-	cmdMemo = sync.Map{}
+	availMemo.Clear()
+	cmdMemo.Clear()
 }
 
 // memoizedHasCommand is HasCommand with a short-lived per-process cache.
@@ -70,16 +77,28 @@ func memoizedHasCommand(name string) bool {
 // queries (pacman -Qo <path>, pacman -Qi <pkg>) must NOT use this.
 func memoizedRunCmd(name string, args ...string) (string, error) {
 	key := name + "\x00" + strings.Join(args, "\x00")
-	if e, ok := cmdMemo.Load(key); ok {
-		entry := e.(cmdEntry)
-		if time.Now().Before(entry.expires) {
-			if entry.failed {
-				return entry.out, errFromString(entry.errStr)
-			}
-			return entry.out, nil
-		}
+	if entry, ok := cachedCommand(key); ok {
+		return entry.out, cachedCommandError(entry)
+	}
+	flight := &cmdFlight{done: make(chan struct{})}
+	actual, loaded := cmdFlights.LoadOrStore(key, flight)
+	if loaded {
+		pending := actual.(*cmdFlight)
+		<-pending.done
+		return pending.out, pending.err
+	}
+	defer func() {
+		close(flight.done)
+		cmdFlights.Delete(key)
+	}()
+	// Another leader may have completed between the fast lookup and acquiring
+	// the flight. Recheck to avoid executing the same query again.
+	if entry, ok := cachedCommand(key); ok {
+		flight.out, flight.err = entry.out, cachedCommandError(entry)
+		return flight.out, flight.err
 	}
 	out, err := RunCmd(name, args...)
+	flight.out, flight.err = out, err
 	entry := cmdEntry{out: out, expires: time.Now().Add(cmdTTL)}
 	if err != nil {
 		entry.failed = true
@@ -87,6 +106,23 @@ func memoizedRunCmd(name string, args ...string) (string, error) {
 	}
 	cmdMemo.Store(key, entry)
 	return out, err
+}
+
+func cachedCommand(key string) (cmdEntry, bool) {
+	if value, ok := cmdMemo.Load(key); ok {
+		entry := value.(cmdEntry)
+		if time.Now().Before(entry.expires) {
+			return entry, true
+		}
+	}
+	return cmdEntry{}, false
+}
+
+func cachedCommandError(entry cmdEntry) error {
+	if entry.failed {
+		return errFromString(entry.errStr)
+	}
+	return nil
 }
 
 func errFromString(s string) error {
@@ -106,11 +142,6 @@ func (e *memoError) Error() string { return e.s }
 
 func npmPrefix() string {
 	out, _ := memoizedRunCmd("npm", "prefix", "-g")
-	return out
-}
-
-func npmGlobalList() string {
-	out, _ := memoizedRunCmd("npm", "list", "-g", "--depth=0", "--json")
 	return out
 }
 

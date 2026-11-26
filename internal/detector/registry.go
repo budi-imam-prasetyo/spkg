@@ -383,6 +383,11 @@ func applyRuntimeOwner(r *Result, rt RuntimeType, version string) {
 		r.InstallCmd = "rustup toolchain install " + version
 		r.UpgradeCmd = "rustup update"
 		r.RemoveCmd = "rustup toolchain uninstall " + version
+	case RuntimeBun:
+		r.Package = "bun"
+		r.InstallCmd = "curl -fsSL https://bun.sh/install | bash"
+		r.UpgradeCmd = "bun upgrade"
+		r.RemoveCmd = "rm -rf ~/.bun"
 	default:
 		r.Package = string(rt)
 		r.InstallCmd = "# Managed by " + r.RuntimeManager
@@ -428,13 +433,15 @@ func managerFromRuntime(rt RuntimeType) Manager {
 		return ManagerVolta
 	case RuntimeRustup:
 		return ManagerRustup
+	case RuntimeBun:
+		return ManagerBun
 	case RuntimePyenv, RuntimeRye, RuntimePoetry, RuntimeConda, RuntimeMamba, RuntimeMicromamba, RuntimePixi:
 		return ManagerPip
 	case RuntimeGoenv, RuntimeGvm:
 		return ManagerGo
 	case RuntimeRbenv, RuntimeRVM:
 		return ManagerGem
-	case RuntimeSdkman, RuntimeJenv, RuntimeKerl, RuntimePhpenv, RuntimeAsdf, RuntimeMise, RuntimeBun:
+	case RuntimeSdkman, RuntimeJenv, RuntimeKerl, RuntimePhpenv, RuntimeAsdf, RuntimeMise:
 		return ManagerManual
 	default:
 		return ManagerManual

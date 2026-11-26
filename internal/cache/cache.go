@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"syscall"
 	"time"
 
 	gocache "github.com/patrickmn/go-cache"
@@ -18,22 +19,22 @@ func init() {
 }
 
 var (
-	store *gocache.Cache
-	mu    sync.RWMutex
-	ttl   time.Duration = 10 * time.Minute
-	path  string
+	saveMu sync.Mutex
+	store  *gocache.Cache
+	mu     sync.RWMutex
+	ttl    time.Duration = 10 * time.Minute
+	path   string
 )
 
 // Init creates the in-memory store and loads any persisted entries from disk.
 func Init(defaultTTL, cleanupInterval time.Duration) {
+	saveMu.Lock()
+	defer saveMu.Unlock()
 	mu.Lock()
 	defer mu.Unlock()
 	ttl = defaultTTL
-	store = gocache.New(defaultTTL, cleanupInterval)
 	path = cachePath()
-	if path != "" {
-		loadFromDisk(path, store)
-	}
+	store = gocache.NewFrom(defaultTTL, cleanupInterval, readDiskItems(path))
 }
 
 func SetTTL(newTTL time.Duration) {
@@ -51,7 +52,7 @@ func cachePath() string {
 		}
 		dir = filepath.Join(home, ".cache")
 	}
-	full := filepath.Join(dir, "spkg", "cache.gob")
+	full := filepath.Join(dir, "spkg", "cache-v2.gob")
 	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
 		return ""
 	}
@@ -73,30 +74,53 @@ func Get(key string) (*detector.Result, bool) {
 	return r, ok
 }
 
-func Set(key string, r *detector.Result) {
+// SetMany inserts a batch and persists it with a single serialization/write.
+func SetMany(entries map[string]*detector.Result) {
+	saveMu.Lock()
+	defer saveMu.Unlock()
 	mu.RLock()
-	s := store
-	currentTTL := ttl
+	s, currentTTL := store, ttl
 	mu.RUnlock()
-	if s == nil {
-		return
-	}
-	s.Set(key, r, currentTTL)
-	saveToDisk()
+	setEntries(s, entries, currentTTL)
+}
+
+func Set(key string, r *detector.Result) {
+	SetMany(map[string]*detector.Result{key: r})
 }
 
 func SetWithTTL(key string, r *detector.Result, itemTTL time.Duration) {
+	saveMu.Lock()
+	defer saveMu.Unlock()
 	mu.RLock()
 	s := store
 	mu.RUnlock()
-	if s == nil {
+	setEntries(s, map[string]*detector.Result{key: r}, itemTTL)
+}
+
+// Caller holds saveMu so mutations and persistence retain the same ordering.
+func setEntries(s *gocache.Cache, entries map[string]*detector.Result, itemTTL time.Duration) {
+	if s == nil || len(entries) == 0 {
 		return
 	}
-	s.Set(key, r, itemTTL)
-	saveToDisk()
+	for k, r := range entries {
+		s.Set(k, r, itemTTL)
+	}
+	updates := make(map[string]gocache.Item, len(entries))
+	for k := range entries {
+		if value, expiry, ok := s.GetWithExpiration(k); ok {
+			item := gocache.Item{Object: value}
+			if !expiry.IsZero() {
+				item.Expiration = expiry.UnixNano()
+			}
+			updates[k] = item
+		}
+	}
+	saveToDisk(updates, false)
 }
 
 func Clear() {
+	saveMu.Lock()
+	defer saveMu.Unlock()
 	mu.RLock()
 	s := store
 	mu.RUnlock()
@@ -104,7 +128,7 @@ func Clear() {
 		return
 	}
 	s.Flush()
-	saveToDisk()
+	saveToDisk(nil, true)
 }
 
 func Stats() map[string]int {
@@ -131,23 +155,56 @@ func Items() map[string]gocache.Item {
 	return s.Items()
 }
 
-// saveToDisk persists the whole cache to a gob file so it survives across `spkg`
-// invocations. Errors are intentionally ignored — caching is best-effort.
-func saveToDisk() {
-	if path == "" {
-		return
-	}
+// saveToDisk merges only this operation's updates under a cross-process lock.
+// Publishing a complete temporary file by rename keeps readers safe if a
+// process exits while writing. Cache failures remain best-effort.
+// Caller holds saveMu.
+func saveToDisk(updates map[string]gocache.Item, clear bool) {
 	mu.RLock()
-	s := store
+	p := path
 	mu.RUnlock()
-	if s == nil {
+	if p == "" {
 		return
 	}
-	data, err := encode(s.Items())
+	lock, err := os.OpenFile(p+".lock", os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		return
 	}
-	_ = os.WriteFile(path, data, 0o600)
+	defer lock.Close()
+	for {
+		err = syscall.Flock(int(lock.Fd()), syscall.LOCK_EX)
+		if err != syscall.EINTR {
+			break
+		}
+	}
+	if err != nil {
+		return
+	}
+	defer syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
+	items := make(map[string]gocache.Item)
+	if !clear {
+		items = readDiskItems(p)
+	}
+	for k, item := range updates {
+		items[k] = item
+	}
+	data, err := encode(items)
+	if err != nil {
+		return
+	}
+	f, err := os.CreateTemp(filepath.Dir(p), ".cache-*.gob")
+	if err != nil {
+		return
+	}
+	defer os.Remove(f.Name())
+	if _, err = f.Write(data); err != nil {
+		f.Close()
+		return
+	}
+	if err = f.Close(); err != nil {
+		return
+	}
+	_ = os.Rename(f.Name(), p)
 }
 
 func encode(items map[string]gocache.Item) ([]byte, error) {
@@ -159,20 +216,24 @@ func encode(items map[string]gocache.Item) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func loadFromDisk(p string, s *gocache.Cache) {
+// Preserve absolute expiration timestamps rather than extending TTL on reload.
+func readDiskItems(p string) map[string]gocache.Item {
+	items := make(map[string]gocache.Item)
 	data, err := os.ReadFile(p)
 	if err != nil {
-		return
+		return items
 	}
-	var items map[string]gocache.Item
 	if err := gob.NewDecoder(bytes.NewReader(data)).Decode(&items); err != nil {
-		return
+		return make(map[string]gocache.Item)
 	}
-	now := time.Now()
+	if items == nil {
+		return make(map[string]gocache.Item)
+	}
+	now := time.Now().UnixNano()
 	for k, item := range items {
-		if item.Expiration > 0 && item.Expiration < now.UnixNano() {
-			continue
+		if item.Expiration > 0 && item.Expiration <= now {
+			delete(items, k)
 		}
-		s.Set(k, item.Object, time.Duration(item.Expiration-now.UnixNano()))
 	}
+	return items
 }

@@ -93,7 +93,7 @@ func runDetect(cmd *cobra.Command, args []string) error {
 			}
 
 			if !noCache {
-				if cached, found := cache.Get(rp.Real); found {
+				if cached, found := cache.Get(detectionCacheKey(rp, name)); found {
 					copy := *cached
 					copy.Executable = name
 					results[i] = &copy
@@ -111,14 +111,18 @@ func runDetect(cmd *cobra.Command, args []string) error {
 				missNames[n] = args[i]
 			}
 
+			entries := make(map[string]*detector.Result, len(missPaths))
 			for n, r := range detector.DetectBatch(missPaths, missNames) {
 				if !noCache {
-					cache.Set(missPaths[n].Real, r)
+					entries[detectionCacheKey(missPaths[n], missNames[n])] = r
 				}
 				// Report the name the user typed, not the symlink-resolved
 				// basename (npm -> npm-cli.js, node -> node, etc.).
 				r.Executable = missNames[n]
 				results[missIdx[n]] = r
+			}
+			if !noCache {
+				cache.SetMany(entries)
 			}
 		}
 
@@ -149,9 +153,9 @@ func runDetect(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Cache by real path
+	// Cache by query name and both paths: symlink aliases can have different owners.
 	if !noCache {
-		if cached, found := cache.Get(rp.Real); found {
+		if cached, found := cache.Get(detectionCacheKey(rp, name)); found {
 			if verbose {
 				printVerbose(name, rp.Real, true)
 			}
@@ -173,7 +177,7 @@ func runDetect(cmd *cobra.Command, args []string) error {
 	r.Executable = name
 
 	if !noCache {
-		cache.Set(rp.Real, r)
+		cache.Set(detectionCacheKey(rp, name), r)
 	}
 
 	output.PrintResult(r, f, verbose)
@@ -303,7 +307,7 @@ func runAll(cmd *cobra.Command, args []string) error {
 		}
 		// Honor --no-cache for the bulk scan.
 		if !noCache {
-			if cached, found := cache.Get(rp.Real); found {
+			if cached, found := cache.Get(detectionCacheKey(rp, bin)); found {
 				copy := *cached
 				copy.Executable = bin
 				results = append(results, &copy)
@@ -314,11 +318,16 @@ func runAll(cmd *cobra.Command, args []string) error {
 		missNames = append(missNames, bin)
 	}
 
+	entries := make(map[string]*detector.Result, len(misses))
 	for i, r := range detector.DetectBatch(misses, missNames) {
 		if !noCache {
-			cache.Set(misses[i].Real, r)
+			entries[detectionCacheKey(misses[i], missNames[i])] = r
 		}
+		r.Executable = missNames[i]
 		results = append(results, r)
+	}
+	if !noCache {
+		cache.SetMany(entries)
 	}
 
 	if len(results) == 0 {
@@ -394,4 +403,9 @@ func printVerbose(name, execPath string, fromCache bool) {
 		fmt.Fprintf(os.Stderr, "Running package manager detectors...\n")
 		fmt.Fprintf(os.Stderr, "Running runtime/version manager detectors...\n")
 	}
+}
+
+// NUL separators cannot occur in executable names or filesystem paths.
+func detectionCacheKey(rp detector.ResolvedPath, name string) string {
+	return name + "\x00" + rp.Original + "\x00" + rp.Real
 }

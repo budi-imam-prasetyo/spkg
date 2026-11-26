@@ -33,10 +33,23 @@ func (d *NpmDetector) Detect(execPath string) *Result {
 		}
 	}
 
-	base := filepath.Base(execPath)
+	// A shared prefix/bin is not ownership evidence. Follow its symlinks
+	// before identifying the package, so e.g. tsc belongs to typescript.
+	packagePath := execPath
+	if !inLib {
+		resolved, err := filepath.EvalSymlinks(execPath)
+		if err != nil || !strings.HasPrefix(resolved, libModules) {
+			return nil
+		}
+		packagePath = resolved
+	}
+	pkgName := pkgFromNodeModulesPath(packagePath)
+	if pkgName == "" {
+		return nil
+	}
 
 	// If detecting npm itself, show how to install/remove npm
-	if base == "npm" || base == "npx" || base == "npm-cli.js" {
+	if pkgName == "npm" {
 		return &Result{
 			Found:          true,
 			ExecutablePath: execPath,
@@ -47,19 +60,6 @@ func (d *NpmDetector) Detect(execPath string) *Result {
 			UpgradeCmd:     "npm install -g npm@latest",
 			RemoveCmd:      "# npm is normally installed with Node.js",
 		}
-	}
-
-	globalList := npmGlobalList()
-	pkgName := extractNpmPkgName(globalList, base)
-	// The resolved path may point at the real script inside the package
-	// (e.g. .../node_modules/9remote/dist/cli.cjs), so `base` is a filename
-	// like "cli.cjs", not the package name. Recover the real package name
-	// from the node_modules path segment when possible.
-	if fromPath := pkgFromNodeModulesPath(execPath); fromPath != "" {
-		pkgName = fromPath
-	}
-	if pkgName == "" {
-		pkgName = base
 	}
 
 	return &Result{
@@ -77,20 +77,6 @@ func (d *NpmDetector) Detect(execPath string) *Result {
 			Weight: int(ConfidenceHigh),
 		}},
 	}
-}
-
-func extractNpmPkgName(jsonOutput, binName string) string {
-	for _, line := range strings.Split(jsonOutput, "\n") {
-		line = strings.TrimSpace(line)
-		if strings.Contains(line, "\""+binName+"\"") {
-			parts := strings.SplitN(line, ":", 2)
-			if len(parts) > 0 {
-				name := strings.Trim(parts[0], " \"")
-				return name
-			}
-		}
-	}
-	return ""
 }
 
 func (d *NpmDetector) Score(execPath string) (Confidence, []Reason) {

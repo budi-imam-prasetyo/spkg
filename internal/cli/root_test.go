@@ -11,6 +11,7 @@ import (
 )
 
 func TestRootDefaultsToTwoColumnTable(t *testing.T) {
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 	cmd := NewRootCmd()
 	flag := cmd.PersistentFlags().Lookup("output")
 	if flag == nil || flag.DefValue != "table" {
@@ -19,6 +20,7 @@ func TestRootDefaultsToTwoColumnTable(t *testing.T) {
 }
 
 func TestRootRejectsInvalidOutputFormat(t *testing.T) {
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 	cmd := NewRootCmd()
 	cmd.SetArgs([]string{"git", "--output", "invalid"})
 	cmd.SetOut(&bytes.Buffer{})
@@ -29,6 +31,7 @@ func TestRootRejectsInvalidOutputFormat(t *testing.T) {
 }
 
 func TestRootAcceptsMultipleExecutables(t *testing.T) {
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 	cmd := NewRootCmd()
 	cmd.SetArgs([]string{"git", "definitely-not-a-real-binary"})
 	cmd.SetOut(&bytes.Buffer{})
@@ -40,6 +43,7 @@ func TestRootAcceptsMultipleExecutables(t *testing.T) {
 }
 
 func TestRootBatchAllMissingFails(t *testing.T) {
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 	cmd := NewRootCmd()
 	cmd.SetArgs([]string{"definitely-not-a-real-binary", "also-not-real"})
 	cmd.SetOut(&bytes.Buffer{})
@@ -52,6 +56,7 @@ func TestRootBatchAllMissingFails(t *testing.T) {
 // Regression: output order must follow input order even when some args are
 // already cached and others need detection.
 func TestRootBatchPreservesInputOrder(t *testing.T) {
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 	// Use coreutils every Linux distro ships with a stable basename. python3,
 	// node, etc. are symlinks whose resolved basename varies across distros
 	// (python3 -> python3.12 on Ubuntu), which makes the position assertion
@@ -118,6 +123,7 @@ func TestRootBatchPreservesInputOrder(t *testing.T) {
 }
 
 func TestRootSupportsVersionFlag(t *testing.T) {
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 	SetVersion("v-test")
 	cmd := NewRootCmd()
 	var out bytes.Buffer

@@ -8,7 +8,7 @@ import (
 )
 
 func TestCacheOperations(t *testing.T) {
-	Init(time.Minute, time.Minute)
+	initTestCache(t)
 
 	r := &detector.Result{
 		Found:   true,
@@ -28,7 +28,7 @@ func TestCacheOperations(t *testing.T) {
 }
 
 func TestCacheMiss(t *testing.T) {
-	Init(time.Minute, time.Minute)
+	initTestCache(t)
 	_, found := Get("nonexistent-key")
 	if found {
 		t.Error("expected cache miss")
@@ -36,7 +36,7 @@ func TestCacheMiss(t *testing.T) {
 }
 
 func TestCacheClear(t *testing.T) {
-	Init(time.Minute, time.Minute)
+	initTestCache(t)
 
 	r := &detector.Result{Found: true}
 	Set("key1", r)
@@ -50,7 +50,7 @@ func TestCacheClear(t *testing.T) {
 }
 
 func TestCacheStats(t *testing.T) {
-	Init(time.Minute, time.Minute)
+	initTestCache(t)
 
 	r := &detector.Result{Found: true}
 	Set("key1", r)
@@ -62,7 +62,7 @@ func TestCacheStats(t *testing.T) {
 }
 
 func TestCacheSetWithTTL(t *testing.T) {
-	Init(time.Minute, time.Minute)
+	initTestCache(t)
 
 	r := &detector.Result{Found: true, Package: "ttl-test"}
 	SetWithTTL("ttl-key", r, time.Millisecond*50)
@@ -77,7 +77,7 @@ func TestCacheSetWithTTL(t *testing.T) {
 }
 
 func TestCacheItems(t *testing.T) {
-	Init(time.Minute, time.Minute)
+	initTestCache(t)
 
 	r := &detector.Result{Found: true}
 	Set("a", r)
@@ -90,7 +90,7 @@ func TestCacheItems(t *testing.T) {
 }
 
 func BenchmarkCacheGet(b *testing.B) {
-	Init(time.Minute, time.Minute)
+	initTestCache(b)
 	r := &detector.Result{Found: true, Package: "bench"}
 	Set("bench-key", r)
 
@@ -100,10 +100,16 @@ func BenchmarkCacheGet(b *testing.B) {
 }
 
 func BenchmarkCacheSet(b *testing.B) {
-	Init(time.Minute, time.Minute)
+	initTestCache(b)
 	r := &detector.Result{Found: true, Package: "bench"}
 
 	for i := 0; i < b.N; i++ {
 		Set("bench-key", r)
 	}
+}
+
+func initTestCache(t testing.TB) {
+	t.Helper()
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	Init(time.Minute, time.Minute)
 }

@@ -1,6 +1,7 @@
 package detector
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,64 +18,33 @@ func (d *AppImageDetector) IsAvailable() bool {
 }
 
 func (d *AppImageDetector) Detect(execPath string) *Result {
-	if strings.HasSuffix(execPath, ".AppImage") {
-		return &Result{
-			Found:          true,
-			ExecutablePath: execPath,
-			Manager:        ManagerAppImage,
-			Package:        filepath.Base(execPath),
-			InstallCmd:     "# Download .AppImage file",
-			UpgradeCmd:     "# Download latest .AppImage file",
-			RemoveCmd:      "rm " + execPath,
-		}
+	// Renamed AppImages retain the ELF AppImage marker at offset 8.
+	// A desktop launcher mentioning a binary is not ownership evidence.
+	if !strings.HasSuffix(execPath, ".AppImage") && !hasAppImageHeader(execPath) {
+		return nil
 	}
+	return &Result{
+		Found:          true,
+		ExecutablePath: execPath,
+		Manager:        ManagerAppImage,
+		Package:        filepath.Base(execPath),
+		InstallCmd:     "# Download .AppImage file",
+		UpgradeCmd:     "# Download latest .AppImage file",
+		RemoveCmd:      "rm " + execPath,
+	}
+}
 
-	home := HomeDir()
-	// Bound the search to user-owned application directories. We deliberately do
-	// NOT walk system dirs like /opt (potentially huge, slow, and reads unrelated
-	// files). A reasonable file-count cap guards against runaway walks.
-	appImageDirs := []string{
-		filepath.Join(home, "Applications"),
-		filepath.Join(home, ".local", "share", "applications"),
+func hasAppImageHeader(path string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
 	}
-	base := filepath.Base(execPath)
-	for _, dir := range appImageDirs {
-		if _, err := os.Stat(dir); err != nil {
-			continue
-		}
-		found := false
-		scanned := 0
-		_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-			if found || err != nil || info.IsDir() {
-				return nil
-			}
-			// Cap the number of files we inspect to keep the walk bounded.
-			scanned++
-			if scanned > 2000 {
-				return filepath.SkipDir
-			}
-			if strings.HasSuffix(path, ".desktop") {
-				content, _ := os.ReadFile(path)
-				if strings.Contains(string(content), base) {
-					found = true
-				}
-			}
-			return nil
-		})
-		if found {
-			return &Result{
-				Found:          true,
-				ExecutablePath: execPath,
-				Manager:        ManagerAppImage,
-				Package:        base,
-				InstallCmd:     "# Download .AppImage file",
-				UpgradeCmd:     "# Download latest .AppImage file",
-				RemoveCmd:      "rm " + execPath,
-			}
-		}
+	defer f.Close()
+	var header [11]byte
+	if _, err := io.ReadFull(f, header[:]); err != nil {
+		return false
 	}
-
-	return nil
+	return string(header[:4]) == "\x7fELF" && header[8] == 'A' && header[9] == 'I' && (header[10] == 1 || header[10] == 2)
 }
 
 func (d *AppImageDetector) Score(execPath string) (Confidence, []Reason) {

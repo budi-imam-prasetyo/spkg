@@ -310,16 +310,18 @@ func (d *SdkmanDetector) IsAvailable() bool {
 func (d *SdkmanDetector) Detect(execPath string) (RuntimeType, string, string, int) {
 	home := HomeDir()
 	sdkmanDir := filepath.Join(home, ".sdkman", "candidates")
-	if !strings.HasPrefix(execPath, sdkmanDir) {
+	if !strings.HasPrefix(execPath, sdkmanDir+"/") {
 		return RuntimeNone, "", "", 0
 	}
 	rest := strings.TrimPrefix(execPath, sdkmanDir+"/")
-	parts := strings.SplitN(rest, "/", 2)
+	parts := strings.SplitN(rest, "/", 3)
 	if len(parts) >= 2 {
 		tool := parts[0]
 		version := parts[1]
-		if version == "current" && len(parts) >= 3 {
-			version = parts[2]
+		if version == "current" {
+			if real, err := filepath.EvalSymlinks(execPath); err == nil && real != execPath {
+				return d.Detect(real)
+			}
 		}
 		name := Capitalize(tool)
 		return RuntimeSdkman, name + " " + version, "SDKMAN!", 95
@@ -460,12 +462,12 @@ func (d *AsdfDetector) IsAvailable() bool {
 func (d *AsdfDetector) Detect(execPath string) (RuntimeType, string, string, int) {
 	home := HomeDir()
 	asdfInstalls := filepath.Join(home, ".asdf", "installs")
-	if !strings.HasPrefix(execPath, asdfInstalls) {
+	if !strings.HasPrefix(execPath, asdfInstalls+"/") {
 		return RuntimeNone, "", "", 0
 	}
 	rest := strings.TrimPrefix(execPath, asdfInstalls+"/")
-	parts := strings.SplitN(rest, "/", 2)
-	if len(parts) >= 2 {
+	parts := strings.SplitN(rest, "/", 3)
+	if len(parts) >= 2 && parts[1] != "" {
 		plugin := parts[0]
 		version := parts[1]
 		name := Capitalize(plugin)
@@ -483,12 +485,12 @@ func (d *MiseDetector) IsAvailable() bool { return HasCommand("mise") }
 func (d *MiseDetector) Detect(execPath string) (RuntimeType, string, string, int) {
 	home := HomeDir()
 	miseInstalls := filepath.Join(home, ".local", "share", "mise", "installs")
-	if !strings.HasPrefix(execPath, miseInstalls) {
+	if !strings.HasPrefix(execPath, miseInstalls+"/") {
 		return RuntimeNone, "", "", 0
 	}
 	rest := strings.TrimPrefix(execPath, miseInstalls+"/")
-	parts := strings.SplitN(rest, "/", 2)
-	if len(parts) >= 2 {
+	parts := strings.SplitN(rest, "/", 3)
+	if len(parts) >= 2 && parts[1] != "" {
 		plugin := parts[0]
 		version := parts[1]
 		name := Capitalize(plugin)
