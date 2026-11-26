@@ -3,6 +3,29 @@
 Semua perubahan penting pada `spkg` didokumentasikan di sini. Proyek mengikuti
 [Semantic Versioning](https://semver.org/).
 
+## [1.5.1] - 2026-11-26
+
+### Perbaikan
+- Detektor npm memeriksa target symlink sebelum mengklaim executable dalam
+  direktori bersama dan memakai nama paket yang benar, termasuk scoped package.
+- Detektor AppImage tidak lagi menganggap file desktop biasa sebagai bukti
+  kepemilikan; AppImage tanpa ekstensi dikenali melalui header executable.
+- Ownership Bun dan saran perintahnya dipertahankan saat overlay runtime.
+- Versi mise, asdf, dan SDKMAN tidak lagi memuat potongan path executable;
+  symlink `current` SDKMAN diikuti untuk memperoleh versi.
+- Key cache membedakan nama query, path awal, dan target symlink.
+- Query command identik yang berjalan bersamaan berbagi satu subprocess.
+- Cache batch disimpan sekaligus, menggunakan penggantian file atomik dan
+  merge dengan penguncian antarproses agar entri penulis lain tidak hilang.
+- Tes regresi mencakup deteksi, symlink, metadata runtime, serta cache paralel;
+  error cleanup ditangani sesuai pemeriksaan `errcheck` CI.
+
+### Dokumentasi dan rilis
+- README dikoreksi berdasarkan kode, remote Git, dan aset rilis yang tersedia.
+- Binary CI menyertakan versi tag atau identitas commit untuk build branch.
+- Rilis hanya menyertakan binary Linux amd64/arm64, tanpa artifact coverage;
+  publikasi gagal jika salah satu binary tidak ditemukan.
+
 ## [1.5.0] - 2026-10-10
 
 ### Performance — memoization detector queries

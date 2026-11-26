@@ -76,9 +76,9 @@ spkg version
 ```
 
 Versi berasal dari nilai yang disisipkan saat build. `make build` mengambilnya
-dari Git; `go build` biasa memakai `dev`. Workflow CI saat ini juga membangun
-binary rilis tanpa menyisipkan versi, sehingga binary unduhan dapat melaporkan
-`dev` meskipun berada pada halaman rilis bertag.
+dari Git; `go build` biasa memakai `dev`. Mulai v1.5.1, workflow CI menyisipkan
+nama tag ke binary rilis (misalnya `v1.5.1`) dan `dev-<commit>` untuk build
+branch. Binary rilis lama dapat melaporkan `dev` karena belum menyisipkan versi.
 
 ## Penggunaan
 
@@ -274,6 +274,11 @@ CI menguji dengan race detector dan membangun Linux amd64/arm64. Lihat
 [workflow CI](.github/workflows/ci.yml) untuk proses yang benar-benar dijalankan;
 konfigurasi [GoReleaser](.goreleaser.yml) tersedia tetapi tidak dipanggil oleh
 workflow rilis saat ini.
+
+Job `release` hanya dijalankan saat push tag versi `v*`, setelah lint, tes, dan
+kedua build berhasil. Pada push biasa ke `main` atau pull request, status
+`release: Skipped` adalah perilaku yang diharapkan. Rilis memuat dua binary
+Linux; artifact coverage tetap tersedia di run CI dan tidak diunggah ke rilis.
 
 ## Lisensi
 
