@@ -170,7 +170,7 @@ func saveToDisk(updates map[string]gocache.Item, clear bool) {
 	if err != nil {
 		return
 	}
-	defer lock.Close()
+	defer func() { _ = lock.Close() }()
 	for {
 		err = syscall.Flock(int(lock.Fd()), syscall.LOCK_EX)
 		if err != syscall.EINTR {
@@ -180,7 +180,7 @@ func saveToDisk(updates map[string]gocache.Item, clear bool) {
 	if err != nil {
 		return
 	}
-	defer syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
+	defer func() { _ = syscall.Flock(int(lock.Fd()), syscall.LOCK_UN) }()
 	items := make(map[string]gocache.Item)
 	if !clear {
 		items = readDiskItems(p)
@@ -196,9 +196,9 @@ func saveToDisk(updates map[string]gocache.Item, clear bool) {
 	if err != nil {
 		return
 	}
-	defer os.Remove(f.Name())
+	defer func() { _ = os.Remove(f.Name()) }()
 	if _, err = f.Write(data); err != nil {
-		f.Close()
+		_ = f.Close()
 		return
 	}
 	if err = f.Close(); err != nil {

@@ -39,7 +39,7 @@ func hasAppImageHeader(path string) bool {
 	if err != nil {
 		return false
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	var header [11]byte
 	if _, err := io.ReadFull(f, header[:]); err != nil {
 		return false

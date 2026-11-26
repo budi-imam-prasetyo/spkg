@@ -49,10 +49,15 @@ func TestCacheSeparatesSymlinkAliases(t *testing.T) {
 		}
 		os.Stdout = w
 		err = cmd.Execute()
-		w.Close()
+		closeWriteErr := w.Close()
 		os.Stdout = old
+		if closeWriteErr != nil {
+			t.Fatal(closeWriteErr)
+		}
 		data, readErr := io.ReadAll(r)
-		r.Close()
+		if err := r.Close(); err != nil {
+			t.Fatal(err)
+		}
 		if readErr != nil {
 			t.Fatal(readErr)
 		}
